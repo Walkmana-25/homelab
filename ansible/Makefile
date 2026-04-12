@@ -1,7 +1,7 @@
 .PHONY: ping deploy-staging deploy-production inventory-list
 
 ping:
-	ansible all -m ping
+	ansible all -i inventories/staging/hosts.ini -m ping
 
 deploy-staging:
 	ansible-playbook -i inventories/staging/hosts.ini site.yml
