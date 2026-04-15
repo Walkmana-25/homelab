@@ -1,0 +1,6 @@
+---
+- name: Setup NFS Server for k3s
+  hosts: nfs_servers
+  gather_facts: true
+  roles:
+    - role: nfs_server

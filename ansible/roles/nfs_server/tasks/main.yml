@@ -1,0 +1,35 @@
+---
+- name: Install NFS kernel server
+  ansible.builtin.apt:
+    name: nfs-kernel-server
+    state: present
+    update_cache: true
+  become: true
+
+- name: Create the export directory
+  ansible.builtin.file:
+    path: "{{ nfs_export_path }}"
+    state: directory
+    owner: nobody
+    group: nogroup
+    mode: '0777'
+  become: true
+
+- name: Ensure the nfs-kernel-server is running
+  ansible.builtin.systemd:
+    name: nfs-kernel-server
+    state: started
+    enabled: true
+  become: true
+
+- name: Configure /etc/exports
+  ansible.builtin.lineinfile:
+    path: /etc/exports
+    line: "{{ nfs_export_path }} {{ nfs_allowed_network }}(rw,sync,no_subtree_check,no_root_squash)"
+    regexp: "^{{ nfs_export_path }}\\s+"
+    state: present
+  become: true
+  notify: Restart NFS server
+
+- name: Force handlers to apply configuration immediately
+  ansible.builtin.meta: flush_handlers

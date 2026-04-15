@@ -1,0 +1,10 @@
+---
+nfs_servers:
+  hosts:
+    192.16.35.10: # Replace with your actual NFS server IP
+
+  vars:
+    ansible_user: debian # Match the user from k3s inventory
+    ansible_port: 22
+    nfs_export_path: "/srv/nfs/k3s"
+    nfs_allowed_network: "192.16.35.0/24"
