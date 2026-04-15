@@ -16,6 +16,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Install yamllint for YAML linting
+RUN pip3 install --break-system-packages yamllint
+
+# Install kustomize
+RUN KUSTOMIZE_VERSION=5.6.0 && \
+    curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
+    | tar -xz -C /usr/local/bin && \
+    chmod +x /usr/local/bin/kustomize
+
+# Install kubeconform for Kubernetes manifest validation
+RUN KUBECONFORM_VERSION=0.6.7 && \
+    curl -fsSL "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+    | tar -xz -C /usr/local/bin kubeconform && \
+    chmod +x /usr/local/bin/kubeconform
+
 # Install Node.js (via NodeSource) for Gemini CLI
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
