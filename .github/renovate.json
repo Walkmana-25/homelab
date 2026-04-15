@@ -16,12 +16,14 @@
   ],
   "helm-values": {
     "fileMatch": [
-      "argocd/k3s/apps/.+/application\\.ya?ml$"
+      "argocd/k3s/apps/.+/application\\.ya?ml$",
+      "argocd/k3s/apps/.+/infrastructure\\.ya?ml$"
     ]
   },
   "helmv3": {
     "fileMatch": [
-      "argocd/k3s/apps/.+/application\\.ya?ml$"
+      "argocd/k3s/apps/.+/application\\.ya?ml$",
+      "argocd/k3s/apps/.+/infrastructure\\.ya?ml$"
     ]
   },
   "regexManagers": [
