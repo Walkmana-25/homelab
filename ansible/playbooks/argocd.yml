@@ -16,12 +16,12 @@
         kubeconfig: "{{ kubeconfig_path }}"
 
     - name: Add Argo CD Helm repository
-      kubernetes.helm.helm_repository:
+      kubernetes.core.helm_repository:
         name: argo
         repo_url: "https://argoproj.github.io/argo-helm"
 
     - name: Install Argo CD via Helm
-      kubernetes.helm.helm:
+      kubernetes.core.helm:
         name: argocd
         chart_ref: argo/argo-cd
         release_namespace: "{{ argocd_namespace }}"

@@ -10,7 +10,8 @@
 				"redhat.ansible",
 				"redhat.vscode-yaml",
 				"ms-python.python",
-				"ms-python.vscode-pylance"
+				"ms-python.vscode-pylance",
+				"Ryosuke-Asano.zai-vscode-chat"
 			],
 			"settings": {
 				"ansible.python.interpreterPath": "/usr/bin/python3",
@@ -24,5 +25,8 @@
 	},
 	"remoteUser": "vscode",
 	"postCreateCommand": "cd ansible && make install-lint && make install-requirements",
-	"workspaceFolder": "/workspaces/homelab"
+	"workspaceFolder": "/workspaces/homelab",
+	"mounts": [
+		"source=${localEnv:HOME}/.gemini,target=/home/vscode/.gemini,type=bind,consistency=cached"
+	]
 }

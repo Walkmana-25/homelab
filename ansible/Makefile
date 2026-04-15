@@ -1,7 +1,7 @@
 .PHONY: ping deploy-staging deploy-production inventory-list ping-nfs deploy-nfs restart-nfs install-requirements ping-k3s install-k3s upgrade-k3s reboot-k3s deploy-argocd check lint install-lint
 
 install-lint:
-	pip install -r requirements.txt
+	pip install --break-system-packages -r requirements.txt
 
 lint:
 	ansible-lint .

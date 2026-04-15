@@ -4,4 +4,3 @@ collections:
     type: git
     version: 2c3f3773c704bd00bf7f6fc340cac8ab7ce9121b
   - name: kubernetes.core
-  - name: kubernetes.helm
