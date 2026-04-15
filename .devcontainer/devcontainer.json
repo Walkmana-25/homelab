@@ -1,0 +1,28 @@
+{
+	"name": "Ansible Dev Environment",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"context": ".."
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"redhat.ansible",
+				"redhat.vscode-yaml",
+				"ms-python.python",
+				"ms-python.vscode-pylance"
+			],
+			"settings": {
+				"ansible.python.interpreterPath": "/usr/bin/python3",
+				"ansible.ansible.path": "/usr/local/bin/ansible",
+				"ansible.validation.lint.enabled": true,
+				"yaml.schemas": {
+					"kubernetes": "*.yaml"
+				}
+			}
+		}
+	},
+	"remoteUser": "vscode",
+	"postCreateCommand": "cd ansible && make install-lint && make install-requirements",
+	"workspaceFolder": "/workspace"
+}
