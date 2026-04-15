@@ -7,9 +7,6 @@
   "schedule": [
     "before 9am on monday"
   ],
-  "platform": "github",
-  "onboarding": false,
-  "requireConfig": "optional",
   "enabledManagers": [
     "helm-values",
     "helmv3",
