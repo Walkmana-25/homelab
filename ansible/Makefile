@@ -1,4 +1,21 @@
-.PHONY: ping deploy-staging deploy-production inventory-list ping-nfs deploy-nfs restart-nfs install-requirements ping-k3s install-k3s upgrade-k3s reboot-k3s deploy-argocd
+.PHONY: ping deploy-staging deploy-production inventory-list ping-nfs deploy-nfs restart-nfs install-requirements ping-k3s install-k3s upgrade-k3s reboot-k3s deploy-argocd check lint install-lint
+
+install-lint:
+	pip install -r requirements.txt
+
+lint:
+	ansible-lint .
+
+check: lint
+	@echo "Checking syntax for all playbooks..."
+	ansible-playbook --syntax-check site.yml
+	ansible-playbook --syntax-check playbooks/*.yml
+	@echo "Checking inventory files..."
+	ansible-inventory -i inventories/staging/hosts.ini --list > /dev/null
+	ansible-inventory -i inventories/production/hosts.ini --list > /dev/null
+	ansible-inventory -i inventories/k3s/inventory.yml --list > /dev/null
+	ansible-inventory -i inventories/k3s/inventory-nfs.yml --list > /dev/null
+	@echo "All checks passed!"
 
 install-requirements:
 	ansible-galaxy collection install -r requirements.yml

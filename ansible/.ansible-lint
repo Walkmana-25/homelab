@@ -1,0 +1,7 @@
+---
+profile: null # Use the default profile
+exclude_paths:
+  - .git/
+  - .github/
+  #- roles/ # If roles are from external sources, you might want to exclude them or lint them separately
+verbosity: 1
