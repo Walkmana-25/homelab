@@ -1,0 +1,34 @@
+---
+- name: Deploy Argo CD
+  hosts: server[0] # Usually run against the first server node
+  become: true
+  vars:
+    argocd_namespace: argocd
+    argocd_chart_version: 7.7.1 # You can update this to the latest version
+    kubeconfig_path: /etc/rancher/k3s/k3s.yaml
+
+  tasks:
+    - name: Create argocd namespace
+      kubernetes.core.k8s:
+        name: "{{ argocd_namespace }}"
+        kind: Namespace
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+
+    - name: Add Argo CD Helm repository
+      kubernetes.helm.helm_repository:
+        name: argo
+        repo_url: "https://argoproj.github.io/argo-helm"
+
+    - name: Install Argo CD via Helm
+      kubernetes.helm.helm:
+        name: argocd
+        chart_ref: argo/argo-cd
+        release_namespace: "{{ argocd_namespace }}"
+        chart_version: "{{ argocd_chart_version }}"
+        kubeconfig: "{{ kubeconfig_path }}"
+        wait: true
+        values:
+          server:
+            extraArgs:
+              - --insecure # For initial setup without TLS certificates
