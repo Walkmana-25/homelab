@@ -2,34 +2,33 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: hello-world-infra
+  name: sealed-secrets
   namespace: argocd
   labels:
     app.kubernetes.io/managed-by: argocd
     app.kubernetes.io/part-of: infrastructure
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
-    repoURL: https://ealenn.github.io/charts
-    chart: echo-server
-    targetRevision: 0.5.0
+    repoURL: https://bitnami-labs.github.io/sealed-secrets
+    chart: sealed-secrets
+    targetRevision: 2.17.3
     helm:
       values: |
-        replicaCount: 1
-        image:
-          tag: latest
         resources:
           requests:
-            cpu: 10m
-            memory: 32Mi
-          limits:
             cpu: 50m
             memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
   destination:
     server: https://kubernetes.default.svc
-    namespace: hello-world-infra
+    namespace: sealed-secrets
   syncPolicy:
     automated:
       prune: true
@@ -37,6 +36,7 @@ spec:
       allowEmpty: false
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
     retry:
       limit: 3
       backoff:

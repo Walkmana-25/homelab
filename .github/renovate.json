@@ -1,0 +1,59 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "timezone": "Asia/Tokyo",
+  "schedule": [
+    "before 9am on monday"
+  ],
+  "platform": "github",
+  "onboarding": false,
+  "requireConfig": "optional",
+  "enabledManagers": [
+    "helm-values",
+    "helmv3",
+    "github-actions",
+    "ansible",
+    "regex"
+  ],
+  "helm-values": {
+    "fileMatch": [
+      "argocd/k3s/apps/.+/application\\.ya?ml$"
+    ]
+  },
+  "helmv3": {
+    "fileMatch": [
+      "argocd/k3s/apps/.+/application\\.ya?ml$"
+    ]
+  },
+  "regexManagers": [
+    {
+      "fileMatch": [
+        "^\\.github/workflows/[^/]+\\.ya?ml$"
+      ],
+      "matchStrings": [
+        "uses: (?<depName>[^@]+)@(?<currentValue>[^\\s]+)"
+      ],
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "semver-coerced"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "non-breaking updates",
+      "automerge": true
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "groupName": "major updates",
+      "automerge": false
+    }
+  ],
+  "prHourlyLimit": 5,
+  "prConcurrentLimit": 10,
+  "labels": ["renovate"],
+  "commitMessagePrefix": "chore(deps):",
+  "separateMajorMinor": true
+}

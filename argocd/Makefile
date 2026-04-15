@@ -4,6 +4,7 @@ SHELL := /bin/bash
 
 # Directories to check
 APPS_DIR := k3s/apps
+MANIFESTS_DIR := k3s/manifests
 
 # YAML files to lint
 YAML_FILES := $(shell find . -name '*.yaml' -o -name '*.yml')
@@ -20,7 +21,7 @@ lint-yaml: ## Lint all YAML files with yamllint
 
 validate-kustomize: ## Validate kustomize builds for all environments
 	@echo "=== Validating kustomize builds ==="
-	@for dir in $(shell find $(APPS_DIR) -name 'kustomization.yaml' -exec dirname {} \;); do \
+	@for dir in $(shell find $(APPS_DIR) $(MANIFESTS_DIR) -name 'kustomization.yaml' -exec dirname {} \;); do \
 		echo "  Checking $$dir..."; \
 		if ! kustomize build $$dir > /dev/null 2>&1; then \
 			echo "  ERROR: kustomize build failed for $$dir"; \
@@ -32,11 +33,11 @@ validate-kustomize: ## Validate kustomize builds for all environments
 
 validate-manifests: ## Validate ArgoCD Application manifests with kubeconform
 	@echo "=== Validating Kubernetes manifests ==="
-	@for dir in $(shell find $(APPS_DIR) -name 'kustomization.yaml' -exec dirname {} \;); do \
+	@for dir in $(shell find $(APPS_DIR) $(MANIFESTS_DIR) -name 'kustomization.yaml' -exec dirname {} \;); do \
 		echo "  Validating $$dir..."; \
 		kustomize build $$dir | kubeconform \
 			-schema-location 'https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/{{.NormalizedKubernetesVersion}}-standalone{{.KindSuffix}}/{{.ResourceKind}}.json' \
-			-skip Application \
+			-skip 'Application,IPAddressPool,L2Advertisement' \
 			-strict || exit 1; \
 	done
 	@echo "  All manifests validated!"
