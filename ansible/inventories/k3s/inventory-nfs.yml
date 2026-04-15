@@ -1,10 +1,10 @@
 ---
 nfs_servers:
   hosts:
-    192.16.35.10: # Replace with your actual NFS server IP
+    k3s-nfs.k8s.cloud-milky.solufit.net:
 
   vars:
     ansible_user: debian # Match the user from k3s inventory
     ansible_port: 22
     nfs_export_path: "/srv/nfs/k3s"
-    nfs_allowed_network: "192.16.35.0/24"
+    nfs_allowed_network: "10.2.0.0/24"
