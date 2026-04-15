@@ -15,7 +15,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/Walkmana-25/homelab.git
-    path: argocd/k3s/manifests/metallb
+    path: argocd/k3s/apps/infrastructure/metallb/config
     targetRevision: main
     kustomize: {}
   destination:
