@@ -8,22 +8,21 @@
     "before 9am on monday"
   ],
   "enabledManagers": [
+    "argocd",
     "helm-values",
-    "helmv3",
     "github-actions",
     "ansible",
     "regex"
   ],
-  "helm-values": {
+  "argocd": {
     "fileMatch": [
-      "argocd/k3s/apps/.+/application\\.ya?ml$",
-      "argocd/k3s/apps/.+/infrastructure\\.ya?ml$"
+      "argocd/k3s/application-.+\\.ya?ml$",
+      "argocd/k3s/apps/.+/application\\.ya?ml$"
     ]
   },
-  "helmv3": {
+  "helm-values": {
     "fileMatch": [
-      "argocd/k3s/apps/.+/application\\.ya?ml$",
-      "argocd/k3s/apps/.+/infrastructure\\.ya?ml$"
+      "argocd/k3s/apps/.+/application\\.ya?ml$"
     ]
   },
   "regexManagers": [
@@ -42,7 +41,7 @@
     {
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "non-breaking updates",
-      "automerge": true
+      "automerge": false
     },
     {
       "matchUpdateTypes": ["major"],
