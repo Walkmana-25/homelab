@@ -32,6 +32,9 @@
           server:
             extraArgs:
               - --insecure # For initial setup without TLS certificates
+          configs:
+            params:
+              timeout.reconciliation: 3600s  # 60 minutes (use webhook for faster updates)
 
     - name: Deploy ArgoCD infrastructure application
       kubernetes.core.k8s:
