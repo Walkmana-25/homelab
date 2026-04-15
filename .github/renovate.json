@@ -12,27 +12,24 @@
     "helm-values",
     "github-actions",
     "ansible",
-    "regex"
+    "custom.regex"
   ],
   "argocd": {
-    "fileMatch": [
-      "argocd/k3s/application-.+\\.ya?ml$",
-      "argocd/k3s/apps/.+/application\\.ya?ml$"
+    "managerFilePatterns": [
+      "/argocd/k3s/application-.+\\.ya?ml$/",
+      "/argocd/k3s/apps/.+/application\\.ya?ml$/"
     ]
   },
   "helm-values": {
-    "fileMatch": [
-      "argocd/k3s/apps/.+/application\\.ya?ml$"
+    "managerFilePatterns": [
+      "/argocd/k3s/apps/.+/application\\.ya?ml$/"
     ]
   },
-  "regexManagers": [
+  "customManagers": [
     {
-      "fileMatch": [
-        "^\\.github/workflows/[^/]+\\.ya?ml$"
-      ],
-      "matchStrings": [
-        "uses: (?<depName>[^@]+)@(?<currentValue>[^\\s]+)"
-      ],
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": ["uses: (?<depName>[^@]+)@(?<currentValue>[^\\s]+)"],
       "datasourceTemplate": "github-tags",
       "versioningTemplate": "semver-coerced"
     }
