@@ -1,8 +1,8 @@
 ---
 nfs_export_path: "/srv/nfs/k3s"
-nfs_allowed_network: "192.16.35.0/24"
+nfs_allowed_network: "10.2.0.0/24"
 
 # Block device configuration for NFS storage
-nfs_block_device: "/dev/sdb"
-nfs_filesystem_type: "ext4"
+nfs_block_device: "/dev/vda"
+nfs_filesystem_type: "btrfs"
 nfs_mount_point: "/srv/nfs"

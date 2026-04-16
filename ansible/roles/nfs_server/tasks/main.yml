@@ -35,7 +35,7 @@
 - name: Add entry to /etc/fstab
   ansible.builtin.lineinfile:
     path: /etc/fstab
-    line: "{{ nfs_block_device }} {{ nfs_mount_point }} {{ nfs_filesystem_type }} defaults 0 2"
+    line: "{{ nfs_block_device }} {{ nfs_mount_point }} {{ nfs_filesystem_type }} defaults,compress=zstd 0 2"
     regexp: "^{{ nfs_block_device | regex_escape }}\\s+"
     state: present
     create: true
