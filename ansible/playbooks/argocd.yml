@@ -3,6 +3,7 @@
   hosts: server[0] # Usually run against the first server node
   become: true
   vars:
+    homelab_root: "{{ playbook_dir | dirname | dirname }}"
     argocd_namespace: argocd
     argocd_chart_version: 7.7.1 # You can update this to the latest version
     kubeconfig_path: /etc/rancher/k3s/k3s.yaml
@@ -55,11 +56,11 @@
     - name: Deploy ArgoCD infrastructure application
       kubernetes.core.k8s:
         state: present
-        src: "{{ playbook_dir }}/../../argocd/k3s/application-infrastructure.yaml"
+        src: "{{ homelab_root }}/argocd/k3s/application-infrastructure.yaml"
         kubeconfig: "{{ kubeconfig_path }}"
 
     - name: Deploy ArgoCD application application
       kubernetes.core.k8s:
         state: present
-        src: "{{ playbook_dir }}/../../argocd/k3s/application-application.yaml"
+        src: "{{ homelab_root }}/argocd/k3s/application-application.yaml"
         kubeconfig: "{{ kubeconfig_path }}"
