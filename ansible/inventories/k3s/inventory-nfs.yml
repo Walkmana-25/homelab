@@ -4,7 +4,7 @@ nfs_servers:
     k3s-nfs.k8s.cloud-milky.solufit.net:
 
   vars:
-    ansible_user: debian # Match the user from k3s inventory
+    ansible_user: ubuntu # Match the user from k3s inventory
     ansible_port: 22
     nfs_export_path: "/srv/nfs/k3s"
     nfs_allowed_network: "10.2.0.0/24"

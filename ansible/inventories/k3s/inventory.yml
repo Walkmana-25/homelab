@@ -12,8 +12,8 @@ k3s_cluster:
   # Required Vars
   vars:
     ansible_port: 22
-    ansible_user: debian
-    k3s_version: v1.31.12+k3s1
+    ansible_user: ubuntu
+    k3s_version: v1.35.3+k3s1
     # The token should be a random string of reasonable length. You can generate
     # one with the following commands:
     # - openssl rand -base64 64
