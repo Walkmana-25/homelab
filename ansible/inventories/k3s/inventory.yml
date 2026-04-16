@@ -24,7 +24,7 @@ k3s_cluster:
     api_endpoint: "k3s-controller.k8s.cloud-milky.solufit.net"
 
     # Optional vars
-    # extra_server_args: ""
+    extra_server_args: "--disable traefik --disable local-storage --disable servicelb"
     # extra_agent_args: ""
     # extra_install_envs: { 'INSTALL_K3S_SKIP_SELINUX_RPM': 'true' }
     # cluster_context: k3s-ansible
