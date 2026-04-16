@@ -4,56 +4,56 @@ install-lint:
 	pip install --break-system-packages -r requirements.txt
 
 lint:
-	ansible-lint .
+	ansible-lint -vv .
 
 check: lint
 	@echo "Checking syntax for all playbooks..."
-	ansible-playbook --syntax-check site.yml
-	ansible-playbook --syntax-check playbooks/*.yml
+	ansible-playbook -vv --syntax-check site.yml
+	ansible-playbook -vv --syntax-check playbooks/*.yml
 	@echo "Checking inventory files..."
-	ansible-inventory -i inventories/staging/hosts.ini --list > /dev/null
-	ansible-inventory -i inventories/production/hosts.ini --list > /dev/null
-	ansible-inventory -i inventories/k3s/inventory.yml --list > /dev/null
-	ansible-inventory -i inventories/k3s/inventory-nfs.yml --list > /dev/null
+	ansible-inventory -vv -i inventories/staging/hosts.ini --list > /dev/null
+	ansible-inventory -vv -i inventories/production/hosts.ini --list > /dev/null
+	ansible-inventory -vv -i inventories/k3s/inventory.yml --list > /dev/null
+	ansible-inventory -vv -i inventories/k3s/inventory-nfs.yml --list > /dev/null
 	@echo "All checks passed!"
 
 install-requirements:
-	ansible-galaxy collection install -r requirements.yml
+	ansible-galaxy -vv collection install -r requirements.yml
 
 ping:
-	ansible all -i inventories/staging/hosts.ini -m ping
+	ansible -vv all -i inventories/staging/hosts.ini -m ping
 
 deploy-staging:
-	ansible-playbook -i inventories/staging/hosts.ini site.yml
+	ansible-playbook -vv -i inventories/staging/hosts.ini site.yml
 
 deploy-production:
-	ansible-playbook -i inventories/production/hosts.ini site.yml
+	ansible-playbook -vv -i inventories/production/hosts.ini site.yml
 
 inventory-list:
-	ansible-inventory --list
+	ansible-inventory -vv --list
 
 ping-nfs:
-	ansible nfs_servers -i inventories/k3s/inventory-nfs.yml -m ping
+	ansible -vv nfs_servers -i inventories/k3s/inventory-nfs.yml -m ping
 
 deploy-nfs:
-	ansible-playbook -i inventories/k3s/inventory-nfs.yml playbooks/nfs-server.yml
+	ansible-playbook -vv -i inventories/k3s/inventory-nfs.yml playbooks/nfs-server.yml
 
 restart-nfs:
-	ansible nfs_servers -i inventories/k3s/inventory-nfs.yml -m ansible.builtin.systemd -a "name=nfs-kernel-server state=restarted" --become
+	ansible -vv nfs_servers -i inventories/k3s/inventory-nfs.yml -m ansible.builtin.systemd -a "name=nfs-kernel-server state=restarted" --become
 
 ping-k3s:
-	ansible k3s_cluster -i inventories/k3s/inventory.yml -m ping
+	ansible -vv k3s_cluster -i inventories/k3s/inventory.yml -m ping
 
 install-k3s:
-	ansible-playbook k3s.orchestration.site -i inventories/k3s/inventory.yml
-	ansible-playbook k3s.orchestration.site -i inventories/k3s/inventory.yml --tags kubeconfig
-	ansible-playbook -i inventories/k3s/inventory.yml playbooks/argocd.yml
+	ansible-playbook -vv k3s.orchestration.site -i inventories/k3s/inventory.yml
+	ansible-playbook -vv k3s.orchestration.site -i inventories/k3s/inventory.yml --tags kubeconfig
+	ansible-playbook -vv -i inventories/k3s/inventory.yml playbooks/argocd.yml
 
 upgrade-k3s:
-	ansible-playbook k3s.orchestration.site -i inventories/k3s/inventory.yml --tags upgrade
+	ansible-playbook -vv k3s.orchestration.site -i inventories/k3s/inventory.yml --tags upgrade
 
 reboot-k3s:
-	ansible k3s_cluster -i inventories/k3s/inventory.yml -m ansible.builtin.reboot --become
+	ansible -vv k3s_cluster -i inventories/k3s/inventory.yml -m ansible.builtin.reboot --become
 
 deploy-argocd:
-	ansible-playbook -i inventories/k3s/inventory.yml playbooks/argocd.yml
+	ansible-playbook -vv -i inventories/k3s/inventory.yml playbooks/argocd.yml
