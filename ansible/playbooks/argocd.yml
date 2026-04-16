@@ -8,6 +8,11 @@
     kubeconfig_path: /etc/rancher/k3s/k3s.yaml
 
   tasks:
+    - name: Install kubernetes Python library
+      ansible.builtin.apt:
+        name: python3-kubernetes
+        state: present
+
     - name: Create argocd namespace
       kubernetes.core.k8s:
         name: "{{ argocd_namespace }}"
