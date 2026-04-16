@@ -56,11 +56,11 @@
     - name: Deploy ArgoCD infrastructure application
       kubernetes.core.k8s:
         state: present
-        src: "{{ homelab_root }}/argocd/k3s/application-infrastructure.yaml"
+        resource_definition: "{{ lookup('file', homelab_root + '/argocd/k3s/application-infrastructure.yaml') }}"
         kubeconfig: "{{ kubeconfig_path }}"
 
     - name: Deploy ArgoCD application application
       kubernetes.core.k8s:
         state: present
-        src: "{{ homelab_root }}/argocd/k3s/application-application.yaml"
+        resource_definition: "{{ lookup('file', homelab_root + '/argocd/k3s/application-application.yaml') }}"
         kubeconfig: "{{ kubeconfig_path }}"
