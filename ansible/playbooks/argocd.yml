@@ -13,6 +13,17 @@
         name: python3-kubernetes
         state: present
 
+    - name: Download Helm installation script
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
+        dest: /tmp/get_helm.sh
+        mode: '0700'
+
+    - name: Execute Helm installation script
+      ansible.builtin.command: /tmp/get_helm.sh
+      args:
+        creates: /usr/local/bin/helm
+
     - name: Create argocd namespace
       kubernetes.core.k8s:
         name: "{{ argocd_namespace }}"
