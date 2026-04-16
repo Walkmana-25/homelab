@@ -55,11 +55,11 @@
     - name: Deploy ArgoCD infrastructure application
       kubernetes.core.k8s:
         state: present
-        src: "{{ playbook_dir }}/../argocd/k3s/application-infrastructure.yaml"
+        src: "{{ playbook_dir }}/../../argocd/k3s/application-infrastructure.yaml"
         kubeconfig: "{{ kubeconfig_path }}"
 
     - name: Deploy ArgoCD application application
       kubernetes.core.k8s:
         state: present
-        src: "{{ playbook_dir }}/../argocd/k3s/application-application.yaml"
+        src: "{{ playbook_dir }}/../../argocd/k3s/application-application.yaml"
         kubeconfig: "{{ kubeconfig_path }}"
