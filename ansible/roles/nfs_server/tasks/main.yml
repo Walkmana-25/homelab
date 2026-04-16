@@ -1,4 +1,56 @@
 ---
+# Block device formatting and mounting tasks
+- name: Check if block device exists
+  ansible.builtin.stat:
+    path: "{{ nfs_block_device }}"
+  register: block_device_stat
+  become: true
+  failed_when: not block_device_stat.stat.exists
+
+- name: Check if block device is already formatted
+  ansible.builtin.command:
+    cmd: blkid -o value -s TYPE {{ nfs_block_device }}
+  register: block_device_fs
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Format block device with {{ nfs_filesystem_type }} filesystem
+  community.general.filesystem:
+    dev: "{{ nfs_block_device }}"
+    fstype: "{{ nfs_filesystem_type }}"
+    force: false
+  become: true
+  when: block_device_fs.rc != 0 or block_device_fs.stdout == ""
+
+- name: Create mount point directory
+  ansible.builtin.file:
+    path: "{{ nfs_mount_point }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
+- name: Add entry to /etc/fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: "{{ nfs_block_device }} {{ nfs_mount_point }} {{ nfs_filesystem_type }} defaults 0 2"
+    regexp: "^{{ nfs_block_device | regex_escape }}\\s+"
+    state: present
+    create: true
+  become: true
+
+- name: Mount the block device
+  ansible.posix.mount:
+    path: "{{ nfs_mount_point }}"
+    src: "{{ nfs_block_device }}"
+    fstype: "{{ nfs_filesystem_type }}"
+    opts: defaults
+    state: mounted
+  become: true
+
+# NFS server installation and configuration
 - name: Install NFS kernel server
   ansible.builtin.apt:
     name: nfs-kernel-server
