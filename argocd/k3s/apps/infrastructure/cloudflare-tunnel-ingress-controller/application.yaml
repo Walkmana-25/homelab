@@ -1,0 +1,54 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloudflare-tunnel-ingress-controller
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: infrastructure
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://helm.strrl.dev
+    chart: cloudflare-tunnel-ingress-controller
+    targetRevision: 0.0.23
+    helm:
+      values: |
+        cloudflare:
+          secretRef:
+            name: cloudflare-tunnel-credentials
+            accountIDKey: account_id
+            tunnelNameKey: tunnel_name
+            apiTokenKey: api_token
+        ingressClass:
+          name: cloudflare-tunnel
+          isDefaultClass: false
+        replicaCount: 1
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cloudflare-tunnel-ingress-controller
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
