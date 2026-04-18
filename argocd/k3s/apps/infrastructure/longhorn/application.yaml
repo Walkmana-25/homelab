@@ -19,6 +19,7 @@ spec:
     targetRevision: 1.11.1
     helm:
       values: |
+        preUpgradeChecker.enabled: false
         defaultSettings:
           defaultReplicaCount: 1
           createDefaultDiskLabeledNodes: true
