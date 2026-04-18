@@ -22,9 +22,11 @@ spec:
         defaultSettings:
           defaultReplicaCount: 1
           createDefaultDiskLabeledNodes: true
+          defaultDataPath: /mnt/longhorn
         persistence:
           defaultClass: true
           defaultClassReplicaCount: 1
+          defaultFsType: btrfs
         longhornUI:
           replicas: 1
           resources:
