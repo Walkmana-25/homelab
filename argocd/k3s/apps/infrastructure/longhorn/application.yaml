@@ -24,7 +24,7 @@ spec:
           upgradeVersionCheck: false
         defaultSettings:
           defaultReplicaCount: 1
-          createDefaultDiskLabeledNodes: true
+          createDefaultDiskLabeledNodes: false
           defaultDataPath: /mnt/longhorn
         persistence:
           defaultClass: true
