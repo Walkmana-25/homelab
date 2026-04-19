@@ -18,8 +18,8 @@ spec:
     chart: longhorn
     targetRevision: 1.11.1
     helm:
-      values: |
-        preUpgradeChecker.enabled: false
+      valuesObject:
+        preUpgradeChecker.jobEnabled: false
         defaultSettings:
           defaultReplicaCount: 1
           createDefaultDiskLabeledNodes: true
