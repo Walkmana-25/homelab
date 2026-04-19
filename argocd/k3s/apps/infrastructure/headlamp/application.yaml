@@ -49,6 +49,15 @@ spec:
               - kind: ServiceAccount
                 name: headlamp-admin
                 namespace: headlamp
+          - |
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: headlamp-admin-token
+              namespace: headlamp
+              annotations:
+                kubernetes.io/service-account.name: headlamp-admin
+            type: kubernetes.io/service-account-token
         resources:
           requests:
             cpu: 50m
