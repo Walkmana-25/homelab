@@ -1,0 +1,7 @@
+---
+- name: Setup btrfs storage for Longhorn on k3s nodes
+  hosts: k3s_cluster
+  gather_facts: true
+  become: true
+  roles:
+    - role: btrfs_longhorn

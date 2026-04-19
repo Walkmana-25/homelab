@@ -1,0 +1,5 @@
+---
+# Block device configuration for Longhorn storage
+longhorn_block_device: "/dev/vda"
+longhorn_filesystem_type: "btrfs"
+longhorn_mount_point: "/mnt/longhorn"

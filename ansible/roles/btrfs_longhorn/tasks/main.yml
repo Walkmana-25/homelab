@@ -1,0 +1,43 @@
+---
+# Block device formatting and mounting tasks for Longhorn storage
+
+- name: Check if block device exists
+  ansible.builtin.stat:
+    path: "{{ longhorn_block_device }}"
+  register: block_device_stat
+  become: true
+  failed_when: not block_device_stat.stat.exists
+
+- name: Check if block device is already formatted
+  ansible.builtin.command:
+    cmd: blkid -o value -s TYPE {{ longhorn_block_device }}
+  register: block_device_fs
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Format block device with {{ longhorn_filesystem_type }} filesystem
+  community.general.filesystem:
+    dev: "{{ longhorn_block_device }}"
+    fstype: "{{ longhorn_filesystem_type }}"
+    force: false
+  become: true
+  when: block_device_fs.rc != 0 or block_device_fs.stdout == ""
+
+- name: Create mount point directory
+  ansible.builtin.file:
+    path: "{{ longhorn_mount_point }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
+- name: Mount the btrfs filesystem with compress=zstd
+  ansible.posix.mount:
+    path: "{{ longhorn_mount_point }}"
+    src: "{{ longhorn_block_device }}"
+    fstype: "{{ longhorn_filesystem_type }}"
+    opts: defaults,compress=zstd
+    state: mounted
+  become: true
