@@ -20,6 +20,7 @@ spec:
     helm:
       values: |
         fullnameOverride: sealed-secrets-controller
+        keyrenewperiod: "0"
         resources:
           requests:
             cpu: 50m
