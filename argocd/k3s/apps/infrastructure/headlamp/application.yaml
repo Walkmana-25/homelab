@@ -23,12 +23,12 @@ spec:
           type: ClusterIP
         ingress:
           enabled: true
-          className: cloudflare-tunnel
+          ingressClassName: cloudflare-tunnel
           hosts:
             - host: headlamp.k8s.lapis-dev.work
               paths:
                 - path: /
-                  pathType: Prefix
+                  type: Prefix
         resources:
           requests:
             cpu: 50m
