@@ -18,7 +18,10 @@ spec:
     chart: victoria-metrics-k8s-stack
     targetRevision: 0.74.1
     helm:
-      valuesObject:
+      valuesObject: 
+        vmagent:
+          spec:
+            scrapeInterval: 60s
         grafana:
           enabled: false
         defaultDashboardsEnabled: true
