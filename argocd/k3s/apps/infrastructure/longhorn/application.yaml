@@ -29,7 +29,7 @@ spec:
         persistence:
           defaultClass: true
           defaultClassReplicaCount: 1
-          defaultFsType: btrfs
+          defaultFsType: ext4
         longhornUI:
           replicas: 1
           resources:
