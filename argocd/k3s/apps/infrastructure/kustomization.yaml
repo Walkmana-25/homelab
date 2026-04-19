@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - sealed-secrets
+  - cert-manager
   - metallb
   - metallb-config
   - nfs-provisioner
