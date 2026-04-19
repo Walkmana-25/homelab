@@ -8,3 +8,13 @@
         name: nfs-common
         state: present
         update_cache: true
+
+- name: Install Btrfs Progs
+  hosts: k3s_cluster
+  become: true
+  tasks:
+    - name: Install btrfs-progs
+      ansible.builtin.apt:
+        name: btrfs-progs
+        state: present
+        update_cache: true
