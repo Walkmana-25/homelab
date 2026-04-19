@@ -13,6 +13,9 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
+  syncPolicy:
+    syncOptions:
+      - Replace=true
   source:
     repoURL: https://victoriametrics.github.io/helm-charts
     chart: victoria-metrics-single
