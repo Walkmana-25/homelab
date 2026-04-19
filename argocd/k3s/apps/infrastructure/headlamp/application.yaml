@@ -25,7 +25,7 @@ spec:
           enabled: true
           ingressClassName: cloudflare-tunnel
           hosts:
-            - host: headlamp.k8s.lapis-dev.work
+            - host: headlamp-k8s.lapis-dev.work
               paths:
                 - path: /
                   type: Prefix
