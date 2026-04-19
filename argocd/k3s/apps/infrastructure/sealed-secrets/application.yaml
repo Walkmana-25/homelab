@@ -19,6 +19,7 @@ spec:
     targetRevision: 2.18.5
     helm:
       values: |
+        fullnameOverride: sealed-secrets-controller
         resources:
           requests:
             cpu: 50m
@@ -28,14 +29,13 @@ spec:
             memory: 256Mi
   destination:
     server: https://kubernetes.default.svc
-    namespace: sealed-secrets
+    namespace: kube-system
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
       allowEmpty: false
     syncOptions:
-      - CreateNamespace=true
       - ServerSideApply=true
     retry:
       limit: 3
