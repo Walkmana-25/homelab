@@ -20,7 +20,15 @@ spec:
     helm:
       values: |
         service:
-          type: LoadBalancer
+          type: ClusterIP
+        ingress:
+          enabled: true
+          className: cloudflare-tunnel
+          hosts:
+            - host: headlamp.k8s.lapis-dev.work
+              paths:
+                - path: /
+                  pathType: Prefix
         resources:
           requests:
             cpu: 50m
