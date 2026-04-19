@@ -11,3 +11,4 @@ resources:
   - victoria-metrics
   - grafana
   - headlamp
+  - argocd-ingress
