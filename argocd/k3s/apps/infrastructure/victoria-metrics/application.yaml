@@ -30,10 +30,14 @@ spec:
               memory: 512Mi
           persistentVolume:
             enabled: true
-            size: 10Gi
-            storageClassName: longhorn
+            size: 32Gi
+            storageClassName: nfs
         vmagent:
           enabled: true
+          persistentVolume:
+            enabled: true
+            size: 2Gi
+            storageClassName: longhorn
           resources:
             requests:
               cpu: 50m
