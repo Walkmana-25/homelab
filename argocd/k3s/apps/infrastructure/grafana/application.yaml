@@ -1,5 +1,5 @@
 # get password
-# kubectl get secret grafana -n monitoring -o jsonpath='{.data.admin-password}' | base64 -d
+# kubectl get secret grafana -n monitoring -o jsonpath='{.data.admin-password}' | base64 -d && echo
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
