@@ -27,7 +27,7 @@ spec:
             apiTokenKey: api_token
         ingressClass:
           name: cloudflare-tunnel
-          isDefaultClass: false
+          isDefaultClass: true
         replicaCount: 1
         resources:
           requests:
