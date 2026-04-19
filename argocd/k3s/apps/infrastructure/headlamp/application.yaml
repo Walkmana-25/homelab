@@ -1,4 +1,6 @@
 ---
+#  kubectl get secret headlamp-admin-token -n headlamp -o jsonpath='{.data.token}' | base64 -d
+#  token取得コマンド
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
