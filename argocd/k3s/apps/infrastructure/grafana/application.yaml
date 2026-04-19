@@ -43,6 +43,17 @@ spec:
             memory: 256Mi
         service:
           type: ClusterIP
+        sidecar:
+          dashboards:
+            enabled: true
+            label: grafana_dashboard
+            labelValue: "1"
+            searchNamespace: monitoring
+          datasources:
+            enabled: true
+            label: grafana_datasource
+            labelValue: "1"
+            searchNamespace: monitoring
         ingress:
           enabled: true
           path: /

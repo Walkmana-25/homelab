@@ -2,7 +2,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: victoria-metrics
+  name: victoria-metrics-k8s-stack
   namespace: argocd
   labels:
     app.kubernetes.io/managed-by: argocd
@@ -14,37 +14,20 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://victoriametrics.github.io/helm-charts
-    chart: victoria-metrics-single
-    targetRevision: 0.35.0
+    repoURL: https://victoriametrics.github.io/helm-charts/
+    chart: victoria-metrics-k8s-stack
+    targetRevision: 0.75.0
     helm:
-      values: |
-        server:
-          retentionPeriod: "90d"
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
-          persistentVolume:
-            enabled: true
-            size: 32Gi
-            storageClassName: nfs
-        vmagent:
-          enabled: true
-          persistentVolume:
-            enabled: true
-            size: 2Gi
-            storageClassName: longhorn
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 200m
-              memory: 128Mi
+      valuesObject:
+        grafana:
+          enabled: false
+        defaultDashboardsEnabled: true
+        defaultDashboards:
+          labels:
+            grafana_dashboard: "1"
+        alertmanager:
+          enabled: false
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
@@ -55,7 +38,6 @@ spec:
       allowEmpty: false
     syncOptions:
       - CreateNamespace=true
-      - Replace=true
     retry:
       limit: 3
       backoff:
