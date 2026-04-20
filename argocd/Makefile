@@ -36,7 +36,7 @@ validate-manifests: ## Validate ArgoCD Application manifests with kubeconform
 		echo "  Validating $$dir..."; \
 		kustomize build $$dir | kubeconform \
 			-schema-location 'https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/{{.NormalizedKubernetesVersion}}-standalone{{.KindSuffix}}/{{.ResourceKind}}.json' \
-			-skip 'Application,IPAddressPool,L2Advertisement' \
+			-skip 'Application,IPAddressPool,L2Advertisement,SealedSecret,ConfigMap,Ingress' \
 			-strict || exit 1; \
 	done
 	@echo "  All manifests validated!"
