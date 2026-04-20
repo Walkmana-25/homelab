@@ -1,0 +1,24 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dawarich
+  namespace: dawarich
+  labels:
+    app: dawarich
+    app.kubernetes.io/name: dawarich
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 1000m
+spec:
+  ingressClassName: cloudflare-tunnel
+  rules:
+    - host: timeline.lapis-dev.work
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dawarich
+                port:
+                  number: 3000

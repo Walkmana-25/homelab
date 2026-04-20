@@ -1,0 +1,16 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dawarich-config
+  namespace: dawarich
+  labels:
+    app: dawarich
+    app.kubernetes.io/name: dawarich
+data:
+  DATABASE_URL: "postgresql://dawarich@postgres:5432/dawarich_development"
+  REDIS_URL: "redis://redis:6379/10"
+  APPLICATION_HOST: "timeline.lapis-dev.work"
+  TIME_ZONE: "UTC"
+  RAILS_ENV: "production"
+  RAILS_SECRET_KEY_BASE: "changeme-to-random-64-char-string"
