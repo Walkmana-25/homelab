@@ -2,25 +2,53 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: dawarich
+  name: dawarich-app
   namespace: argocd
   labels:
     app.kubernetes.io/managed-by: argocd
     app.kubernetes.io/part-of: application
-  annotations:
-    argocd.argoproj.io/sync-wave: "5"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
-    repoURL: https://github.com/Walkmana-25/homelab.git
-    path: argocd/k3s/apps/application/dawarich/base
-    targetRevision: main
-    kustomize: {}
+    repoURL: https://charts.cogitri.dev
+    chart: dawarich
+    targetRevision: 2.2.3
+    helm:
+      values: |
+        dawarich:
+          replicaCount: 1
+          hosts:
+            - timeline.lapis-dev.work
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+        persistence:
+          public:
+            enabled: true
+            size: 10Gi
+          watched:
+            enabled: true
+            size: 10Gi
+          storage:
+            enabled: true
+            size: 5Gi
+        ingress:
+          enabled: true
+          className: nginx
+          hosts:
+            - host: timeline.lapis-dev.work
+              paths:
+                - path: /
+                  pathType: Prefix
   destination:
     server: https://kubernetes.default.svc
-    namespace: dawarich
+    namespace: dawarich-app
   syncPolicy:
     automated:
       prune: true
