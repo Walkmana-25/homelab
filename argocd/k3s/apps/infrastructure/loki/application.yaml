@@ -1,0 +1,57 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: infrastructure
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: loki-stack
+    targetRevision: 2.10.2
+    helm:
+      values: |
+        loki:
+          persistence:
+            enabled: true
+            storageClassName: nfs
+            size: 32Gi
+        promtail:
+          enabled: false
+        fluent-bit:
+          enabled: true
+          config:
+            service: |
+              [SERVICE]
+                  Flush         10
+                  Log_Level     info
+                  Daemon        off
+                  Parsers_File  parsers.conf
+                  HTTP_Server   On
+                  HTTP_Listen   0.0.0.0
+                  HTTP_Port     2020
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
