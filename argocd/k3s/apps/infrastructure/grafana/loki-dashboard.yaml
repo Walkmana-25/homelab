@@ -312,7 +312,7 @@ data:
           "targets": [
             {
               "datasource": "Loki",
-              "expr": "{",
+              "expr": "{}",
               "refId": "A"
             }
           ],
