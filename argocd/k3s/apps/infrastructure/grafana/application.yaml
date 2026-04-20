@@ -40,9 +40,8 @@ spec:
         dashboards:
           default:
             loki:
-              gnetId: 15146
-              revision: 1
-              datasource: Loki
+              gnetId: 22874
+              revision: 3
         dashboardProviders:
           dashboardproviders.yaml:
             apiVersion: 1
