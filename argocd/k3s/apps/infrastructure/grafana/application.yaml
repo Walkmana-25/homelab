@@ -39,7 +39,7 @@ spec:
                 editable: true
         dashboards:
           loki:
-            gnetId: 13639
+            gnetId: 15146
             revision: 1
             datasource: Loki
         persistence:
