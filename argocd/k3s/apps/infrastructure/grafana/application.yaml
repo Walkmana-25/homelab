@@ -29,7 +29,7 @@ spec:
                 type: prometheus
                 url: http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc.cluster.local:8428
 
-                isDefault: true
+                isDefault: false
                 editable: true
               - name: Loki
                 type: loki
