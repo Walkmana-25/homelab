@@ -32,12 +32,22 @@ spec:
           public:
             enabled: true
             size: 10Gi
+            accessMode: ReadWriteMany
           watched:
             enabled: true
             size: 10Gi
+            accessMode: ReadWriteMany
           storage:
             enabled: true
             size: 5Gi
+            accessMode: ReadWriteMany
+        postgresql:
+          host: dawarich-postgresql
+          port: 5432
+          auth:
+            database: dawarich
+            username: dawarich
+            password: changeme
         ingress:
           enabled: true
           className: nginx
