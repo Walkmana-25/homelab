@@ -42,7 +42,7 @@ spec:
             loki:
               gnetId: 15146
               revision: 1
-              datasource: Loki
+              # datasource: Loki
         persistence:
           enabled: true
           size: 1Gi
