@@ -13,3 +13,4 @@ resources:
   - grafana
   - headlamp
   - argocd-ingress
+  - loki
