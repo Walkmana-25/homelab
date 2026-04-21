@@ -5,11 +5,23 @@ metadata:
   labels:
     app.kubernetes.io/name: mcp-proxy
 data:
-  default.conf: |
+  default.conf.template: |
+    map $http_authorization $auth_valid {
+        default 0;
+        "~^Bearer ${MCP_AUTH_TOKEN}$" 1;
+        "~^Bearer ${MCP_AUTH_TOKEN_2}$" 1;
+    }
+
     server {
         listen 8080;
 
         location / {
+            if ($auth_valid = 0) {
+                return 401;
+            }
+
+            add_header WWW-Authenticate 'Bearer realm="mcp-proxy"' always;
+
             proxy_pass http://127.0.0.1:9090;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
