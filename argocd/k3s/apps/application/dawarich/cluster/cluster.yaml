@@ -1,0 +1,32 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: dawarich-postgres
+  namespace: dawarich
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+spec:
+  instances: 1
+
+  primaryUpdateStrategy: unsupervised
+
+  bootstrap:
+    initdb:
+      database: dawarich
+      owner: dawarich
+      secret:
+        name: dawarich-postgres-auth
+
+  storage:
+    size: 10Gi
+    storageClass: longhorn
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

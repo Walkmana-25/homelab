@@ -82,9 +82,9 @@ spec:
           auth:
             redisPassword: changeme
 
-        # PostgreSQL (deployed via dawarich-postgres in the same namespace)
+        # PostgreSQL (CloudNativePG - deployed via dawarich-postgres in the same namespace)
         postgresql:
-          host: dawarich-postgres-postgresql
+          host: dawarich-postgres-rw
           port: 5432
           auth:
             database: dawarich

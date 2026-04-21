@@ -1,38 +1,28 @@
 ---
-apiVersion: v1
-kind: Secret
-metadata:
-  name: dawarich-postgres-auth
-  namespace: dawarich
-  labels:
-    app.kubernetes.io/managed-by: argocd
-    app.kubernetes.io/part-of: application
-type: kubernetes.io/basic-auth
-stringData:
-  username: dawarich
-  password: dawarich
----
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: dawarich-postgres
+  name: cloudnative-pg
   namespace: argocd
   labels:
     app.kubernetes.io/managed-by: argocd
-    app.kubernetes.io/part-of: application
+    app.kubernetes.io/part-of: infrastructure
   annotations:
-    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-wave: "-2"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
-    repoURL: https://github.com/Walkmana-25/homelab.git
-    targetRevision: HEAD
-    path: argocd/k3s/apps/application/dawarich/cluster
+    repoURL: https://github.com/cloudnative-pg/charts.git
+    path: charts/cloudnative-pg
+    targetRevision: release-1.26
+    helm:
+      values: |
+        fullnameOverride: cloudnative-pg
   destination:
     server: https://kubernetes.default.svc
-    namespace: dawarich
+    namespace: cnpg-system
   syncPolicy:
     automated:
       prune: true

@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - sealed-secrets
+  - cloudnative-pg
   - cert-manager
   - metallb
   - metallb-config
