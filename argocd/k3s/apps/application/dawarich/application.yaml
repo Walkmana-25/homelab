@@ -84,7 +84,7 @@ spec:
 
         # PostgreSQL (deployed via dawarich-postgres in the same namespace)
         postgresql:
-          host: dawarich-postgresql
+          host: dawarich-postgres-postgresql
           port: 5432
           auth:
             database: dawarich
