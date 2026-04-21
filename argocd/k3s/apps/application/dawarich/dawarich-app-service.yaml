@@ -6,7 +6,7 @@ metadata:
     kompose.version: 1.38.0 (a8f5d1cbd)
   labels:
     io.kompose.service: dawarich-app
-  name: dawarich_app
+  name: dawarich-app
 spec:
   ports:
     - name: "3000"
