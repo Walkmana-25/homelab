@@ -7,3 +7,4 @@ resources:
   - mcp-proxy-auth-token.yaml
   - deployment.yaml
   - service.yaml
+  - ingress.yaml

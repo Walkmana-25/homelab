@@ -12,11 +12,13 @@ data:
         "baseURL": "https://mcp.lapis-dev.work",
         "addr": ":9090",
         "name": "Lapis's MCP",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "type": "streamble-http"
       },
       "mcpServers": {
-        "context7": {
-          "url": "https://mcp.context7.com/mcp"
+        "deepwiki": {
+          "url": "https://mcp.deepwiki.com/mcp",
+          "transportType": "streamble-http"
         }
       }
     }
