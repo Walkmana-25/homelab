@@ -28,6 +28,7 @@
 	"postCreateCommand": "cd ansible && make install-lint && make install-requirements && cd ../argocd && make check",
 	"workspaceFolder": "/workspaces/homelab",
 	"mounts": [
+		"source=${localEnv:HOME}/.kube,target=/home/vscode/.kube,type=bind,consistency=cached",
 		"source=${localEnv:HOME}/.gemini,target=/home/vscode/.gemini,type=bind,consistency=cached"
 	]
 }
