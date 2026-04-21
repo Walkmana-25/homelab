@@ -6,7 +6,8 @@ metadata:
   name: dawarich-storage
 spec:
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
+  storageClassName: nfs
   resources:
     requests:
-      storage: 100Mi
+      storage: 5Gi

@@ -5,8 +5,9 @@ metadata:
     io.kompose.service: dawarich-db-data
   name: dawarich-db-data
 spec:
+  storageClassName: nfs
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   resources:
     requests:
-      storage: 100Mi
+      storage: 5Gi
