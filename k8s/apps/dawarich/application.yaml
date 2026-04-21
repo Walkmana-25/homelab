@@ -13,7 +13,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/Walkmana-25/homelab.git
-    path: k8s/apps/dawarich
+    path: argocd/k3s/apps/application/dawarich
     targetRevision: main
     kustomize: {}
   destination:
