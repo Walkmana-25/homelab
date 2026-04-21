@@ -2,7 +2,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: dawarich-postgresql
+  name: dawarich
   namespace: argocd
   labels:
     app.kubernetes.io/managed-by: argocd
@@ -12,27 +12,10 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://charts.bitnami.com/bitnami
-    chart: postgresql
-    targetRevision: "16.7.x"
-    helm:
-      values: |
-        auth:
-          database: dawarich
-          username: dawarich
-          password: changeme
-        primary:
-          persistence:
-            enabled: true
-            size: 10Gi
-            storageClass: longhorn
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
+    repoURL: https://github.com/Walkmana-25/homelab.git
+    path: argocd/k3s/apps/application/dawarich
+    targetRevision: main
+    kustomize: {}
   destination:
     server: https://kubernetes.default.svc
     namespace: dawarich-app

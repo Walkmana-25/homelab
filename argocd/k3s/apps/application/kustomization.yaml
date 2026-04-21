@@ -3,5 +3,4 @@ kind: Kustomization
 
 resources:
   - hello-world
-  - dawarich-postgresql
   - dawarich

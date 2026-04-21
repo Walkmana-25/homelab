@@ -53,4 +53,4 @@ spec:
       volumes:
         - name: dawarich-shared
           persistentVolumeClaim:
-            claimName: dawarich-shared
+            claimName: dawarich-redis-data
