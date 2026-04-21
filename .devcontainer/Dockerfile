@@ -31,6 +31,12 @@ RUN KUBECONFORM_VERSION=0.6.7 && \
     | tar -xz -C /usr/local/bin kubeconform && \
     chmod +x /usr/local/bin/kubeconform
 
+# Install kompose for converting Docker Compose to Kubernetes manifests
+RUN KOMPOSE_VERSION=v1.38.0 && \
+    curl -fsSL "https://github.com/kubernetes/kompose/releases/download/${KOMPOSE_VERSION}/kompose-linux-amd64" \
+    -o /usr/local/bin/kompose && \
+    chmod +x /usr/local/bin/kompose
+
 # Install Node.js (via NodeSource) for Gemini CLI
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
