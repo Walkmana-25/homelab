@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/part-of: application
 spec:
   instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgis:17
 
   primaryUpdateStrategy: unsupervised
 
@@ -18,6 +19,8 @@ spec:
       owner: dawarich
       secret:
         name: dawarich-postgres-auth
+      postInitApplicationSQL:
+        - CREATE EXTENSION IF NOT EXISTS postgis;
 
   storage:
     size: 10Gi
