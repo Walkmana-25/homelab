@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - hello-world
   - dawarich
+  - mcp-proxy
