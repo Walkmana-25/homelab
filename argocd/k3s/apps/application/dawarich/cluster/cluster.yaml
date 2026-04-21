@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/part-of: application
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgis:18
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.3-minimal-trixie
 
   primaryUpdateStrategy: unsupervised
 
@@ -19,8 +19,14 @@ spec:
       owner: dawarich
       secret:
         name: dawarich-postgres-auth
-      postInitApplicationSQL:
-        - CREATE EXTENSION IF NOT EXISTS postgis;
+
+  postgresql:
+    extensions:
+      - name: postgis
+        image:
+          reference: ghcr.io/cloudnative-pg/postgis-extension:3.6.2-18-trixie
+        ld_library_path:
+          - system
 
   storage:
     size: 10Gi
