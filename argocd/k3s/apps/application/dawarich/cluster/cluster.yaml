@@ -19,6 +19,8 @@ spec:
       owner: dawarich
       secret:
         name: dawarich-postgres-auth
+      postInitApplicationSQL:
+        - CREATE EXTENSION IF NOT EXISTS postgis;
 
   postgresql:
     extensions:
