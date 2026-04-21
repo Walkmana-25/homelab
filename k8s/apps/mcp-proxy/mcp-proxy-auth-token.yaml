@@ -1,24 +1,17 @@
-{
-  "kind": "SealedSecret",
-  "apiVersion": "bitnami.com/v1alpha1",
-  "metadata": {
-    "name": "mcp-proxy-auth-token",
-    "namespace": "argocd"
-  },
-  "spec": {
-    "template": {
-      "metadata": {
-        "name": "mcp-proxy-auth-token",
-        "namespace": "argocd",
-        "labels": {
-          "app.kubernetes.io/name": "mcp-proxy"
-        }
-      },
-      "type": "Opaque"
-    },
-    "encryptedData": {
-      "token": "AgC2FIL0/gpfdmGdPF6X6mLY3WQ2bXAovEx3ux5fPYGnPZRuEMEyZuG/FSKuXa8owuvyIYL2ceZdqRk9h/7o3u2SZX+cwW5uczm5tZTjNatkAc8svU2jfDx6cW8pdXyyfJd4VEM+6HDPh8BE+Gh2OxwWpVYravkGvLwpZzWlZLRXazvckuacWdOl+yeJP1IeJowfgpuSTUskaCg571Lz3smrfOmrOykkwQ+UTVCxOBVymaJyGzhjNP8kbtm9UQ+x6vzCadfwJYcNoZ1SxAh++zyX+3kuYX67mmUGqO901Wfeu7lLwxPKVQzlA7w2Y2OpzHgU1wupR5qsF5t7yEEbzULl+bhWlWFKHq9Qs9oX05hwAfup4Bl1EaZiQvC/H93dPjWsEFygmbs3jVy6U+sxYn81sWG0Bn691DHJzKhso9nkbvxEkhOJdj/hn5Ns/zc/5JJITxl8lWnbNq/aD4swjy8gYEXDca7e7TpHunyH8czLoW8wqHOe04RrC1D5QU9nYatdNvRBHa35E1+QJR+Q0sd6A6orMCFe7LJ9pL0N6bXH9VDtBV5O503LSFHuJc1C42Sj9deOXwl1N7l9l8pBLNulRgiLjNxkiOMiCbElJ3TV1fYEiHwuGg7obBs8HHnxozN7XPSxJbSA8Xes3D0WpboUCB8g+EwjqHfALrFSVKwjUTv5uen2NNE3aPylaZ/DlOmqsvmJpEFyixpgC+niZHv6Na5p9hjiPynIfe5SqO3Qqbyz3r3AFETfw7P7x1xMWJhBgDqwY6AODzYt305DnZvx",
-      "token2": "AgAdcDF+0/d+LJNjwsKx9dEMvHmWEyErNb2dcUTaMDuayt9w3lJf7MJGz0oSph0qVSuxEfyZAV2DkTbU55E/kAHmxfisPilCCUXSjNzOhOSvvIerGA+X4fhcUErTbp6bwOF4SOAS97imAasPYyU9bRRpzDVeg8tVSxiOFK2FEBoTwopbeoeLXx5hVHlALPkzs22YUsjHnrEQ0i/upLTjFaqNDI1ecyqdF9brVfqFjBOJAb7GwnokwJelwp4m0K9FebioyexEX/0UQgC7RabtZlvl4/IKwe4jDuR7G2Nl/zwPCmapdmM4ahMlfinnETp9ldFz0sezXur3+YDKghAm94nGIgXNbLimPrm32KWV3E80WUZODNWKlq4v8ZaGSDf7oTNcmqjZos35x1LWc0SC4wyqJ5cWWtjhIhPvVIAbqh5mU5xhhcMBGAY0Mk7Tm0g3QowvK/RwYYPG0iXxLQ0NzQj6GvAXGyaXLUF2sw1/3rqp9p9tkGAcZ/5ewA+aCifYZ5v2w6i7t+kxzjzt4vI0XwegThS/k4LjkdmMM52JUn4N9iw9OyZ85g+oc2ccX44w8AEoDgOJM+UdXjMzW5jG90E0i7+419Jm+lf+NJSA8WOIB/sK+Fx8FrXt6NHAxOP3MOYsdeOr4Rm6mR9HsEyUIOLXqBqYPYxy0Q3khTH3SnHcRDdvqt4zoKqqrsA1v85eyrxocyhrPI59jszW3GFXj6xIqt2xVg2DgNYH0DxBuYLdKclFXt8VqVjUOSWkwdDvhA9o7IK0DeILvOfZxECCCJS3"
-    }
-  }
-}
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: mcp-proxy-auth-token
+  namespace: argocd
+spec:
+  encryptedData:
+    token: AgBeUf5XaN5HUoFhGyZZsoJ3YpeBpGcZGjICdUtYy71sAKc/sLDa1bcJxusRa4f6QQJAheFOfcSoA0xeUgHgiyKgES5XbI+RORBK/mUz4ep51wex5OPxmtsdmdumVv7Pd1Ivdnaxtm9GGnU7KhF7/WIcOMbs2CSvgN85n4nM0Ga71ngKiHr10tW/6p9rDlo24c/qmljbpa/KleOv2fRt3YgLtwIwdwQoVbFmaFaQYi/c96rBA1QJ+2VFfszzd062hVwu66XYnAh294mUNZCkknjxG2OuA/2b3M7YvSAIRCa0jITjNPAZCTJcCbunC/grSnLOrblEO8KFFKmllqrtM6kacknEEysRwsgRg7bO9leI4lw4CCWkumLheqxBlZ+YBvuAhoiYEqt5rTMtZMWyWs57dGM8oFBssIbDvkqUG2PrFoEq/qsSl0JtazmQcYtZuqMocVeh658qrN7dtpwqyCiSZ9ayBoQe+s6LekwG/p+ycdXJ6xYCBuF9eDjk8bYi4f/cnsJTMaQWHx2BvoQBTgDwtlSslsbdwKJNoXG63pFplCYWWk6VZWpaM/tSvZ5q0s+i2C9NbDp6S2WBNT2z6AqmBy154H4vvWXMOvYKSyYFVc5sAc2BSIHpUuomusCj/FyDr0aUYJ6Vi4O3jh3+v+VVF0yGxxOCCQhyK8+7Y9av/+kVE1us5Z899dIPDq1SiGuezC8PNBhewfyqFR1os0HExH/I+9cC9QIDBysQ/NG5pQFHS0mELxnHE05h2SrTNcrpXfPs4Hhaxs1rDT3zSLJB
+    token2: AgAlVqnAK4N2vnRq7Iq6FSP6BEezBIu0XA6C1/bKfD4ofJ3CX1BlE85PZhvew6GeOWiZniGeASC+0yKi++bCIuvSAirdqGREk6YnQGhuWDD5V/gs+csXiMg8xmTi8Vk+lVcWXxMJkBgjVc5FX4jOzeEeWDpnV2/+B6W+xbcDMumTTtcNFyIRISgbpao7sdRz/ngDBgA7p9bpmUsAfs5PeVnl0dTbeqmwTq2cAbZBX/H26kpQEwllIfkk9PhmbPBKRvOecDJCsx2YF3A28D8WmDrVa56DbAtSZcKsAdIsw/+sqUZkYAVf0E3FjIrfXupYLWDlk0DjIOGdIsAZyaqhFj5z5FnuZaZ+aMPXdCB7NRgAD8FitWmbEf395vTyEunf2jKXnxm0xAwvr8fbvzNkJJs7kq/GKLDcnXbb2fTHlakGgkXKNp55O35Sht3T/sXl29W5KXMqcOwlkW8WUhGLhBDV/DpGLX2H9BxTdL8tSoDfwRCMecLlnhZ9gKeGxVvdjr2S+ZmQWNksVBVCw1neteX3s0JFz7VUMWmt8u+s9o/4xPof/m79Dhs6Ub9DID4LaGx6dtzFjZa2vvrSxz1tm7eebSqBOpNHMuHs7hkttI/Gekxg2IMttW9enKJDWlSScA+kd0Fty1yb5HImT8iBHWWcK7OPnFd0xpToF3Y06q7F9MrOU9GZ1+VbOWMsdBw0A0CsbcZLnrg/zxDjsjfnzX57T1iXYWtqouSCku58AmhDiz2x/R6d6dj+4qOP0sHQgDQTionVHpwuuZxhqAoXr2rt
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mcp-proxy
+      name: mcp-proxy-auth-token
+      namespace: argocd
+    type: Opaque
