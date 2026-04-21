@@ -1,0 +1,55 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dawarich-postgres
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://charts.bitnami.com/bitnami
+    chart: postgresql
+    targetRevision: 16.7.1
+    helm:
+      values: |
+        auth:
+          username: dawarich
+          password: dawarich
+          database: dawarich
+        primary:
+          persistence:
+            enabled: true
+            storageClass: longhorn
+            accessMode: ReadWriteOnce
+            size: 10Gi
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dawarich
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
