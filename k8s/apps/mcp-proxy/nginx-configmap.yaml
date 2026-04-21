@@ -6,6 +6,8 @@ metadata:
     app.kubernetes.io/name: mcp-proxy
 data:
   default.conf.template: |
+    map_hash_bucket_size 128;
+
     map $http_authorization $auth_header_valid {
         default 0;
         "~^Bearer ${MCP_AUTH_TOKEN}$" 1;
