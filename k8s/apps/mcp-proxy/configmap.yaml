@@ -8,6 +8,12 @@ data:
   # Sample
   config.json: |
     {
+      "mcpProxy": {
+        "baseURL": "https://mcp.lapis-dev.work",
+        "addr": ":9090",
+        "name": "Lapis's MCP",
+        "version": "1.0.0",
+      },
       "mcpServers": {
         "context7": {
           "url": "https://mcp.context7.com/mcp"
