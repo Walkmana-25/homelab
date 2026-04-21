@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/part-of: application
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgis:17
+  imageName: ghcr.io/cloudnative-pg/postgis:18
 
   primaryUpdateStrategy: unsupervised
 
