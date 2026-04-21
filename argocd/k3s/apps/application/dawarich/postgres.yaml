@@ -15,8 +15,8 @@ spec:
   project: default
   source:
     repoURL: oci://registry-1.docker.io/bitnamicharts/postgresql
-    chart: postgresql
-    # targetRevision: 18.5.24
+    # chart: postgresql
+    targetRevision: 18.5.24
     helm:
       values: |
         auth:
