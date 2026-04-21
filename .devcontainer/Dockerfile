@@ -42,6 +42,12 @@ RUN KOMPOSE_VERSION=v1.38.0 && \
     -o /usr/local/bin/kompose && \
     chmod +x /usr/local/bin/kompose
 
+# Install kubeseal for Sealed Secrets
+RUN KUBESEAL_VERSION=0.36.6 && \
+    curl -fsSL "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION}/kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz" \
+    | tar -xz -C /usr/local/bin kubeseal && \
+    chmod +x /usr/local/bin/kubeseal
+
 # Install Node.js (via NodeSource) for Gemini CLI
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
