@@ -18,7 +18,6 @@ data:
       "mcpServers": {
         "deepwiki": {
           "url": "https://mcp.deepwiki.com/mcp",
-          "transportType": "streamble-http"
         }
       }
     }
