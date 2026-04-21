@@ -12,7 +12,8 @@
 				"ms-python.python",
 				"ms-python.vscode-pylance",
 				"Ryosuke-Asano.zai-vscode-chat",
-				"RooVeterinaryInc.roo-cline"
+				"RooVeterinaryInc.roo-cline",
+				"ms-kubernetes-tools.vscode-kubernetes-tools"
 			],
 			"settings": {
 				"ansible.python.interpreterPath": "/usr/bin/python3",
