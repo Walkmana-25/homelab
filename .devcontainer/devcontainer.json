@@ -25,7 +25,7 @@
 		}
 	},
 	"remoteUser": "vscode",
-	"postCreateCommand": "cd ansible && make install-lint && make install-requirements && cd ../argocd && make check",
+	"postCreateCommand": "cd ansible && make install-lint && make install-requirements",
 	"workspaceFolder": "/workspaces/homelab",
 	"mounts": [
 		"source=${localEnv:HOME}/.kube,target=/home/vscode/.kube,type=bind,consistency=cached",

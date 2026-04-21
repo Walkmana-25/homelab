@@ -19,6 +19,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install yamllint for YAML linting
 RUN pip3 install --break-system-packages yamllint
 
+# Install kubectl
+RUN curl -fsSL "https://dl.k8s.io/release/v1.35.4/bin/linux/amd64/kubectl" \
+    -o /usr/local/bin/kubectl && \
+    chmod +x /usr/local/bin/kubectl
+
 # Install kustomize
 RUN KUSTOMIZE_VERSION=5.6.0 && \
     curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
