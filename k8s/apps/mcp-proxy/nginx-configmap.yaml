@@ -6,17 +6,30 @@ metadata:
     app.kubernetes.io/name: mcp-proxy
 data:
   default.conf.template: |
-    map $http_authorization $auth_valid {
+    map $http_authorization $auth_header_valid {
         default 0;
         "~^Bearer ${MCP_AUTH_TOKEN}$" 1;
         "~^Bearer ${MCP_AUTH_TOKEN_2}$" 1;
+    }
+
+    map $arg_token $auth_query_valid {
+        default 0;
+        "${MCP_AUTH_TOKEN}" 1;
+        "${MCP_AUTH_TOKEN_2}" 1;
     }
 
     server {
         listen 8080;
 
         location / {
-            if ($auth_valid = 0) {
+            set $auth_ok 0;
+            if ($auth_header_valid = 1) {
+                set $auth_ok 1;
+            }
+            if ($auth_query_valid = 1) {
+                set $auth_ok 1;
+            }
+            if ($auth_ok = 0) {
                 return 401;
             }
 
