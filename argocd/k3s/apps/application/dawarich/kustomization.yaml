@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - dawarich-app-service.yaml
+  - dawarich-ingress.yaml
   - dawarich-app-pod.yaml
   - dawarich-db-data-persistentvolumeclaim.yaml
   - dawarich-db-deployment.yaml
