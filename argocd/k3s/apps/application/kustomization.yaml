@@ -4,4 +4,3 @@ kind: Kustomization
 resources:
   - hello-world
   - dawarich
-  - envoy_ai_gw
