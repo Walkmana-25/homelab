@@ -21,7 +21,7 @@ spec:
         - name: BACKGROUND_PROCESSING_CONCURRENCY
           value: "5"
         - name: DATABASE_HOST
-          value: dawarich_db
+          value: dawarich-db
         - name: DATABASE_NAME
           value: dawarich_development
         - name: DATABASE_PASSWORD
@@ -41,7 +41,7 @@ spec:
         - name: RAILS_LOG_TO_STDOUT
           value: "true"
         - name: REDIS_URL
-          value: redis://dawarich_redis:6379
+          value: redis://dawarich-redis:6379
         - name: SECRET_KEY_BASE
           value: '"CHANGE_ME"'
         - name: SELF_HOSTED

@@ -62,14 +62,25 @@ spec:
         initialDelaySeconds: 30
         periodSeconds: 10
         timeoutSeconds: 10
+      readinessProbe:
+        exec:
+          command:
+            - wget -qO - http://127.0.0.1:3000/api/v1/health | grep -q '"status"\s*:\s*"ok"'
+        failureThreshold: 3
+        initialDelaySeconds: 10
+        periodSeconds: 5
+        timeoutSeconds: 5
       name: dawarich-app
       ports:
         - containerPort: 3000
           protocol: TCP
       resources:
+        requests:
+          cpu: 250m
+          memory: "300Mi"
         limits:
           cpu: 500m
-          memory: "4294967296"
+          memory: "1Gi"
       stdin: true
       tty: true
       volumeMounts:
