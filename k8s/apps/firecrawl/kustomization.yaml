@@ -12,3 +12,4 @@ resources:
   - nuq-worker.yaml
   - nuq-postgres.yaml
   - redis.yaml
+  - mcp-server.yaml

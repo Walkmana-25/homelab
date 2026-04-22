@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firecrawl-mcp
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: firecrawl
+    app.kubernetes.io/component: mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firecrawl-mcp
+  template:
+    metadata:
+      labels:
+        app: firecrawl-mcp
+    spec:
+      containers:
+        - name: firecrawl-mcp
+          image: ghcr.io/firecrawl/firecrawl-mcp-server:latest
+          env:
+            - name: FIRECRAWL_API_URL
+              value: "http://api.firecrawl.svc.cluster.local:3002"
+            - name: FIRECRAWL_API_KEY
+              value: "ephemeral"
+            - name: HTTP_STREAMABLE_SERVER
+              value: "true"
+            - name: PORT
+              value: "3000"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              sed -i 's|server 127.0.0.1:3000|server [::1]:3000|g' /etc/nginx/nginx.conf
+              exec sh /entrypoint.sh
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: firecrawl-mcp
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: firecrawl
+spec:
+  type: ClusterIP
+  selector:
+    app: firecrawl-mcp
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
