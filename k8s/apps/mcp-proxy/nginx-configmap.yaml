@@ -7,6 +7,7 @@ metadata:
 data:
   default.conf.template: |
     map_hash_bucket_size 128;
+    underscores_in_headers on;
 
     map $http_authorization $auth_header_valid {
         default 0;
