@@ -20,7 +20,8 @@ data:
           "transportType": "streamable-http"
         },
         "searxng": {
-          "url": "http://searxng-mcp.mcp-proxy.svc.cluster.local:3000/mcp"
+          "url": "http://searxng-mcp.mcp-proxy.svc.cluster.local:3000/mcp",
+          "transportType": "streamable-http"
         }
       }
     }
