@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   - hello-world
   - dawarich
+  - firecrawl
   - mcp-proxy
   - searxng-mcp
   - searxng
