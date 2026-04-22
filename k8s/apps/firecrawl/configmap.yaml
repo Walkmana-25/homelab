@@ -7,8 +7,6 @@ metadata:
     app.kubernetes.io/part-of: firecrawl
 data:
   HOST: "0.0.0.0"
-  REDIS_URL: "redis://:password@redis:6379"
-  REDIS_RATE_LIMIT_URL: "redis://:password@redis:6379"
   PLAYWRIGHT_MICROSERVICE_URL: "http://playwright-service:3000"
   USE_DB_AUTHENTICATION: "false"
   SENTRY_ENVIRONMENT: "production"

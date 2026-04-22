@@ -23,6 +23,15 @@ spec:
           command: ["node"]
           args: ["--max-old-space-size=3072", "dist/src/services/queue-worker.js"]
           env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl-secret
+                  key: REDIS_PASSWORD
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@redis:6379"
+            - name: REDIS_RATE_LIMIT_URL
+              value: "redis://:$(REDIS_PASSWORD)@redis:6379"
             - name: FLY_PROCESS_GROUP
               value: "worker"
             - name: PORT

@@ -25,6 +25,15 @@ spec:
           ports:
             - containerPort: 3002
           env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl-secret
+                  key: REDIS_PASSWORD
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@redis:6379"
+            - name: REDIS_RATE_LIMIT_URL
+              value: "redis://:$(REDIS_PASSWORD)@redis:6379"
             - name: FLY_PROCESS_GROUP
               value: "app"
             - name: PORT

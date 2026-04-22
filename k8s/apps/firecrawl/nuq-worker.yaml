@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/managed-by: argocd
     app.kubernetes.io/part-of: firecrawl
 spec:
-  replicas: 5
+  replicas: 1
   selector:
     matchLabels:
       app: nuq-worker
