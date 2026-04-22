@@ -68,6 +68,9 @@ spec:
                 formats:
                   - html
                   - json
+
+              botdetection:
+                ip_limit: false
           limiter:
             enabled: false
           uwsgi:
