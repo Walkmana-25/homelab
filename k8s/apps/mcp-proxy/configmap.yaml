@@ -13,6 +13,7 @@ data:
         "addr": ":9090",
         "name": "Lapis's MCP",
         "version": "1.0.0"
+        "type": "streamable-http"
       },
       "mcpServers": {
         "deepwiki": {
