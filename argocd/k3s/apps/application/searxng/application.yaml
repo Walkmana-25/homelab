@@ -1,0 +1,89 @@
+# Service URL: http://searxng.searxng.svc.cluster.local:8080
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: searxng
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://charts.kubito.dev
+    chart: searxng
+    targetRevision: 1.0.7
+    helm:
+      values: |
+        replicaCount: 1
+
+        image:
+          repository: searxng/searxng
+          tag: 2026.4.17-e8299a4c3
+          imagePullPolicy: IfNotPresent
+
+        env:
+          - name: TZ
+            value: "Asia/Tokyo"
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+        config:
+          settings:
+            enabled: true
+            data: |-
+              use_default_settings: true
+
+              general:
+                instance_name: "SearXNG"
+
+              server:
+                secret_key: "$(openssl rand -hex 32)"
+                limiter: false
+                image_proxy: true
+                port: 8080
+                bind_address: "0.0.0.0"
+
+              ui:
+                static_use_hash: true
+
+              search:
+                safe_search: 0
+                autocomplete: ""
+                default_lang: ""
+                formats:
+                  - html
+                  - json
+
+        ingress:
+          enabled: false
+
+        service:
+          type: ClusterIP
+          port: 8080
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: searxng
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
