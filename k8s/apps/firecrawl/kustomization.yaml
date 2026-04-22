@@ -5,7 +5,7 @@ namespace: firecrawl
 
 resources:
   - configmap.yaml
-  - secret.yaml
+  - firecrawl_secret.yaml
   - playwright-service.yaml
   - api.yaml
   - worker.yaml
