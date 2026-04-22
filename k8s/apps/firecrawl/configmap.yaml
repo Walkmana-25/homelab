@@ -16,7 +16,7 @@ data:
   LOGGING_LEVEL: "DEBUG"
   IS_KUBERNETES: "true"
   NUQ_DATABASE_URL: "postgresql://postgres:password@nuq-postgres:5432/postgres"
-  # Custom OpenAI-compatible API endpoint (e.g. Azure OpenAI, local proxy, etc.)
-  # OPENAI_BASE_URL: "https://your-custom-endpoint/v1"
-  # MODEL_NAME: "your-custom-model-name"
-  # MODEL_EMBEDDING_NAME: "your-custom-embedding-model"
+  # Google AI Studio (Gemini) - OpenAI-compatible endpoint
+  OPENAI_BASE_URL: "https://generativelanguage.googleapis.com/v1beta/openai/"
+  MODEL_NAME: "gemini-3-flash-preview"
+  MODEL_EMBEDDING_NAME: "gemini-embedding-2-preview"
