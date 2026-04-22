@@ -18,3 +18,5 @@ data:
   OPENAI_BASE_URL: "https://generativelanguage.googleapis.com/v1beta/openai/"
   MODEL_NAME: "gemini-3-flash-preview"
   MODEL_EMBEDDING_NAME: "gemini-embedding-2-preview"
+  # SearXNG for /search API
+  SEARXNG_ENDPOINT: "http://searxng.searxng.svc.cluster.local:8080"
