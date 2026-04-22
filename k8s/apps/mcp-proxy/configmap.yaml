@@ -18,6 +18,9 @@ data:
         "deepwiki": {
           "url": "https://mcp.deepwiki.com/mcp",
           "transportType": "streamable-http"
+        },
+        "searxng": {
+          "url": "http://searxng-mcp.mcp-proxy.svc.cluster.local:3000/mcp"
         }
       }
     }
