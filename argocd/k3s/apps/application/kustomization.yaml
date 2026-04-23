@@ -5,6 +5,7 @@ resources:
   - hello-world
   - dawarich
   - firecrawl
+  - librechat
   - mcp-proxy
   - searxng-mcp
   - searxng

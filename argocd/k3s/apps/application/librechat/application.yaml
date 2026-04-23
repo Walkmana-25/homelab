@@ -1,0 +1,198 @@
+---
+# LibreChat - Self-hosted AI chat platform
+# https://www.librechat.ai/
+# https://github.com/danny-avila/LibreChat
+#
+# Lightweight configuration:
+#   - MongoDB (embedded Bitnami subchart)
+#   - Meilisearch (embedded subchart, for search)
+#   - Redis: disabled (not required for basic usage)
+#   - RAG API: disabled (not available in OCI chart)
+#   - Ingress: cloudflare-tunnel
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: librechat
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Walkmana-25/homelab.git
+    targetRevision: HEAD
+    path: argocd/k3s/apps/application/librechat
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: librechat
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+---
+# LibreChat Helm release - points to the official OCI chart
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: librechat-helm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+  annotations:
+    # Deploy after credentials are created
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: librechat
+    repoURL: ghcr.io/danny-avila/librechat-chart
+    targetRevision: 2.0.2
+    helm:
+      values: |
+        replicaCount: 1
+
+        image:
+          registry: registry.librechat.ai
+          repository: danny-avila/librechat
+          pullPolicy: IfNotPresent
+
+        # ── Global credentials secret ──────────────────────────
+        global:
+          librechat:
+            existingSecretName: librechat-credentials-env
+
+        # ── LibreChat config ───────────────────────────────────
+        librechat:
+          existingSecretName: librechat-credentials-env
+          configEnv:
+            # General
+            ALLOW_EMAIL_LOGIN: "true"
+            ALLOW_REGISTRATION: "true"
+            DOMAIN_CLIENT: "https://chat.lapis-dev.work"
+            DOMAIN_SERVER: "https://chat.lapis-dev.work"
+            # Search (Meilisearch)
+            SEARCH: "true"
+            MEILI_HOST: "librechat-meilisearch"
+            MEILI_PORT: "7700"
+            # Email (optional - uncomment to enable)
+            # EMAIL_SERVICE: "gmail"
+            # EMAIL_USERNAME: "your-email@gmail.com"
+            # EMAIL_PASSWORD: "your-app-password"
+            # EMAIL_FROM: "LibreChat <your-email@gmail.com>"
+          configYamlContent: |
+            version: 1.0.8
+            cache: true
+            interface:
+              privacyPolicy:
+                externalUrl: "https://librechat.ai/privacy-policy"
+                openNewTab: true
+              termsOfService:
+                externalUrl: "https://librechat.ai/tos"
+                openNewTab: true
+
+        # ── RAG API ────────────────────────────────────────────
+        librechat-rag-api:
+          enabled: false
+
+        # ── Ingress ────────────────────────────────────────────
+        ingress:
+          enabled: true
+          className: cloudflare-tunnel
+          hosts:
+            - host: chat.lapis-dev.work
+              paths:
+                - path: /
+                  pathType: Prefix
+
+        # ── Resources ──────────────────────────────────────────
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+
+        # ── Service ────────────────────────────────────────────
+        service:
+          type: ClusterIP
+          port: 3080
+          targetPort: 3080
+
+        # ── Image volume (user uploads) ────────────────────────
+        imageVolume:
+          enabled: true
+          size: 5Gi
+          accessModes:
+            - ReadWriteOnce
+
+        # ── MongoDB (Bitnami subchart) ─────────────────────────
+        mongodb:
+          enabled: true
+          auth:
+            enabled: false
+          architecture: standalone
+          persistence:
+            enabled: true
+            size: 5Gi
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+        # ── Meilisearch (subchart) ─────────────────────────────
+        meilisearch:
+          enabled: true
+          persistence:
+            enabled: true
+            size: 1Gi
+          auth:
+            existingMasterKeySecret: librechat-credentials-env
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+
+        # ── Redis (disabled for lightweight) ────────────────────
+        redis:
+          enabled: false
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: librechat
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
