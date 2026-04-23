@@ -1,0 +1,49 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openwebui-postgres-auth
+  namespace: openwebui
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+type: kubernetes.io/basic-auth
+stringData:
+  username: openwebui
+  password: openwebui
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openwebui-postgres
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Walkmana-25/homelab.git
+    targetRevision: HEAD
+    path: argocd/k3s/apps/application/openwebui/cluster
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openwebui
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

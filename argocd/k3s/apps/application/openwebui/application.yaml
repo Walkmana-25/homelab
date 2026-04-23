@@ -1,0 +1,113 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openwebui
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://helm.openwebui.com
+    chart: open-webui
+    targetRevision: 14.1.0
+    helm:
+      values: |
+        replicaCount: 1
+
+        ollama:
+          enabled: false
+
+        pipelines:
+          enabled: false
+
+        tika:
+          enabled: false
+
+        terminals:
+          enabled: false
+
+        websocket:
+          enabled: true
+          manager: redis
+          redis:
+            enabled: true
+
+        persistence:
+          enabled: true
+          provider: local
+          size: 2Gi
+          storageClass: nfs
+          accessModes:
+            - ReadWriteMany
+
+        ingress:
+          enabled: true
+          class: cloudflare-tunnel
+          host: chat.lapis-dev.work
+          tls: false
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+
+        extraEnvVars:
+          - name: TZ
+            value: "Asia/Tokyo"
+          - name: ENABLE_DB_MIGRATIONS
+            value: "true"
+          - name: UVICORN_WORKERS
+            value: "1"
+          - name: VECTOR_DB
+            value: "pgvector"
+          - name: PGVECTOR_DB_URL
+            value: "postgresql://openwebui:openwebui@openwebui-postgres-rw.openwebui.svc:5432/openwebui"
+          - name: DATABASE_URL
+            value: "postgresql://openwebui:openwebui@openwebui-postgres-rw.openwebui.svc:5432/openwebui"
+          - name: WEBUI_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: openwebui-secrets
+                key: webui-secret-key
+          # OpenAI 互換 API 接続設定 (値は後で入力)
+          # INIAD API, z.ai Coding Plan (Global)
+          - name: OPENAI_API_BASE_URLS
+            value: "https://openai.iniad.org/api/v1,https://api.z.ai/api/coding/paas/v4"
+          - name: OPENAI_API_KEYS
+            valueFrom:
+              secretKeyRef:
+                name: openwebui-secrets
+                key: openai-api-keys
+          # SearXNG Web Search
+          - name: ENABLE_RAG_WEB_SEARCH
+            value: "true"
+          - name: RAG_WEB_SEARCH_ENGINE
+            value: "searxng"
+          - name: RAG_WEB_SEARCH_SEARXNG_QUERY_URL
+            value: "http://searxng.searxng.svc.cluster.local:8080/search?q=<query>"
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openwebui
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
