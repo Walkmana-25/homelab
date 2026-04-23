@@ -80,7 +80,7 @@ spec:
           # OpenAI 互換 API 接続設定 (値は後で入力)
           # INIAD API, z.ai Coding Plan (Global)
           - name: OPENAI_API_BASE_URLS
-            value: "https://openai.iniad.org/api/v1;https://api.z.ai/api/coding/paas/v4"
+            value: "https://api.openai.iniad.org/api/v1;https://api.z.ai/api/coding/paas/v4"
           - name: OPENAI_API_BASE_URL_NAMES
             value: "INIAD;zai"
           - name: OPENAI_API_KEYS
