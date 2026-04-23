@@ -105,6 +105,41 @@ spec:
               termsOfService:
                 externalUrl: "https://librechat.ai/tos"
                 openNewTab: true
+            endpoints:
+              custom:
+                - name: 'z.ai'
+                  apiKey: '${ZAI_API_KEY}'
+                  baseURL: 'https://api.z.ai/api/coding/paas/v4'
+                  models:
+                    default:
+                      - 'glm-5.1'
+                      - 'glm-5'
+                      - 'glm-5-turbo'
+                      - 'glm-4.7'
+                      - 'glm-4.6v'
+                      - 'glm-4.5-air'
+                    fetch: true
+                  titleConvo: true
+                  titleModel: 'glm-4.5-air'
+                  modelDisplayLabel: 'z.ai'
+                - name: 'INIAD OpenAI'
+                  apiKey: '${INIAD_API_KEY}'
+                  baseURL: '${INIAD_BASE_URL}'
+                  models:
+                    default: ["gpt-5.4-mini"]
+                    fetch: true
+                  titleConvo: true
+                  titleModel: 'current_model'
+                  modelDisplayLabel: 'INIAD OpenAI'
+                - name: 'INIAD Claude'
+                  apiKey: '${INIAD_API_KEY}'
+                  baseURL: '${INIAD_CLAUDE_URL}'
+                  models:
+                    default: ["claude-sonnet-4-6"]
+                    fetch: true
+                  titleConvo: true
+                  titleModel: 'current_model'
+                  modelDisplayLabel: 'INIAD Claude'
 
         # ── RAG API ────────────────────────────────────────────
         librechat-rag-api:
