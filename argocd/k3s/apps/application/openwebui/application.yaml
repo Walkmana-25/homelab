@@ -81,6 +81,8 @@ spec:
           # INIAD API, z.ai Coding Plan (Global)
           - name: OPENAI_API_BASE_URLS
             value: "https://openai.iniad.org/api/v1,https://api.z.ai/api/coding/paas/v4"
+          - name: OPENAI_API_BASE_URL_NAMES
+            value: "INIAD,zai"
           - name: OPENAI_API_KEYS
             valueFrom:
               secretKeyRef:
