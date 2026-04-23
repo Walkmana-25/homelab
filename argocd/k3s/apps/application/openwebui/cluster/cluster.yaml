@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/part-of: application
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgresql:18.3-trixie
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.3-standard-trixie
 
   primaryUpdateStrategy: unsupervised
 
