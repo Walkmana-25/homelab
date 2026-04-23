@@ -9,4 +9,3 @@ resources:
   - mcp-proxy
   - searxng-mcp
   - searxng
-  - openwebui
