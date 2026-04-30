@@ -8,6 +8,7 @@ data:
   proxy.py: |
     from fastmcp import FastMCP
     from fastmcp.server import create_proxy
+    from starlette.responses import JSONResponse
 
 
     # --- MCP upstream servers configuration ---
@@ -54,6 +55,11 @@ data:
         transport="streamable-http",
         path="/mcp",
     )
+
+    async def health(request):
+        return JSONResponse({"status": "ok"})
+
+    app.add_route("/health", health, methods=["GET"])
 
 
     if __name__ == "__main__":
