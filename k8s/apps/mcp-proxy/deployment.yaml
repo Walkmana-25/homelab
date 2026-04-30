@@ -19,9 +19,6 @@ spec:
         - name: config
           configMap:
             name: mcp-proxy-config
-        - name: mcpu-config
-          configMap:
-            name: mcpu-config
         - name: nginx-config
           configMap:
             name: mcp-proxy-nginx
@@ -67,9 +64,6 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /config/config.json
-              subPath: config.json
-            - name: mcpu-config
-              mountPath: /mcpu-config/config.json
               subPath: config.json
           resources:
             requests:
