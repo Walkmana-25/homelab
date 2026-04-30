@@ -14,12 +14,26 @@ data:
     MCP_SERVERS = {
         "deepwiki": {
             "url": "https://mcp.deepwiki.com/mcp",
+            "exclude_tools": [],
         },
         "searxng": {
             "url": "http://searxng-mcp.mcp-proxy.svc.cluster.local:3000/mcp",
+            "exclude_tools": [],
         },
         "firecrawl": {
             "url": "http://firecrawl-mcp.firecrawl.svc.cluster.local:8080/v2/mcp",
+            "exclude_tools": [
+                "mcp_firecrawl_firecrawl_agent",
+                "mcp_firecrawl_firecrawl_agent_status",
+                # "mcp_firecrawl_firecrawl_browser_create",
+                # "mcp_firecrawl_firecrawl_browser_delete",
+                # "mcp_firecrawl_firecrawl_browser_execute",
+                # "mcp_firecrawl_firecrawl_browser_list",
+                # "mcp_firecrawl_firecrawl_interact",
+                # "mcp_firecrawl_firecrawl_interact_stop",
+                # "mcp_firecrawl_firecrawl_check_crawl_status",
+                # "mcp_firecrawl_firecrawl_crawl",
+            ],
         },
     }
 
@@ -29,6 +43,9 @@ data:
 
     for name, server_config in MCP_SERVERS.items():
         proxy = create_proxy(server_config["url"], name=name)
+        exclude = server_config.get("exclude_tools", [])
+        if exclude:
+            proxy.disable(names=set(exclude))
         mcp.mount(proxy)
 
 
