@@ -19,7 +19,9 @@ data:
         },
         "searxng": {
             "url": "http://searxng-mcp.mcp-proxy.svc.cluster.local:3000/mcp",
-            "exclude_tools": [],
+            "exclude_tools": [
+                "web_url_read"
+            ],
         },
         "firecrawl": {
             "url": "http://firecrawl-mcp.firecrawl.svc.cluster.local:8080/v2/mcp",
