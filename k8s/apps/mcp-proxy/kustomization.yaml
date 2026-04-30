@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - configmap.yaml
+  - mcpu-configmap.yaml
   - nginx-configmap.yaml
   - mcp-proxy-auth-token.yaml
   - deployment.yaml

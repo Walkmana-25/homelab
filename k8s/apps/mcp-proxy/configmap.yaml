@@ -5,7 +5,6 @@ metadata:
   labels:
     app.kubernetes.io/name: mcp-proxy
 data:
-  # Sample
   config.json: |
     {
       "mcpProxy": {
@@ -16,17 +15,12 @@ data:
         "type": "streamable-http"
       },
       "mcpServers": {
-        "deepwiki": {
-          "url": "https://mcp.deepwiki.com/mcp",
-          "transportType": "streamable-http"
-        },
-        "searxng": {
-          "url": "http://searxng-mcp.mcp-proxy.svc.cluster.local:3000/mcp",
-          "transportType": "streamable-http"
-        },
-        "firecrawl": {
-          "url": "http://firecrawl-mcp.firecrawl.svc.cluster.local:8080/v2/mcp",
-          "transportType": "streamable-http"
+        "mcpu": {
+          "command": "npx",
+          "args": ["--package=@mcpu/cli", "mcpu-mcp", "--config", "/mcpu-config/config.json"],
+          "env": {
+            "HOME": "/tmp/mcpu"
+          }
         }
       }
     }
