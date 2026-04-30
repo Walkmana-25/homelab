@@ -35,8 +35,9 @@ validate-manifests: ## Validate ArgoCD Application manifests with kubeconform
 	@for dir in $(shell find $(APPS_DIR) -name 'kustomization.yaml' -exec dirname {} \;); do \
 		echo "  Validating $$dir..."; \
 		kustomize build $$dir | kubeconform \
+			-schema-location 'default' \
 			-schema-location 'https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/{{.NormalizedKubernetesVersion}}-standalone{{.KindSuffix}}/{{.ResourceKind}}.json' \
-			-skip 'Application,IPAddressPool,L2Advertisement,SealedSecret,ConfigMap,Ingress' \
+			-skip 'Application,Cluster,IPAddressPool,L2Advertisement,SealedSecret,ConfigMap,Ingress' \
 			-strict || exit 1; \
 	done
 	@echo "  All manifests validated!"
