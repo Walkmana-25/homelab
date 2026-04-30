@@ -5,28 +5,40 @@ metadata:
   labels:
     app.kubernetes.io/name: mcp-proxy
 data:
-  # Sample
-  config.json: |
-    {
-      "mcpProxy": {
-        "baseURL": "https://mcp.lapis-dev.work",
-        "addr": ":9090",
-        "name": "Lapis's MCP",
-        "version": "1.0.0",
-        "type": "streamable-http"
-      },
-      "mcpServers": {
+  proxy.py: |
+    from fastmcp import FastMCP
+    from fastmcp.server import create_proxy
+
+
+    # --- MCP upstream servers configuration ---
+    MCP_SERVERS = {
         "deepwiki": {
-          "url": "https://mcp.deepwiki.com/mcp",
-          "transportType": "streamable-http"
+            "url": "https://mcp.deepwiki.com/mcp",
         },
         "searxng": {
-          "url": "http://searxng-mcp.mcp-proxy.svc.cluster.local:3000/mcp",
-          "transportType": "streamable-http"
+            "url": "http://searxng-mcp.mcp-proxy.svc.cluster.local:3000/mcp",
         },
         "firecrawl": {
-          "url": "http://firecrawl-mcp.firecrawl.svc.cluster.local:8080/v2/mcp",
-          "transportType": "streamable-http"
-        }
-      }
+            "url": "http://firecrawl-mcp.firecrawl.svc.cluster.local:8080/v2/mcp",
+        },
     }
+
+
+    # --- Build the aggregated proxy server ---
+    mcp = FastMCP("mcp-proxy")
+
+    for name, server_config in MCP_SERVERS.items():
+        proxy = create_proxy(server_config["url"], name=name)
+        mcp.mount(proxy)
+
+
+    # --- Create ASGI app ---
+    app = mcp.http_app(
+        transport="streamable-http",
+        path="/mcp",
+    )
+
+
+    if __name__ == "__main__":
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=9090)

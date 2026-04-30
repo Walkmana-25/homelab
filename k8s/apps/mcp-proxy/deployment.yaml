@@ -57,14 +57,20 @@ spec:
               cpu: 50m
               memory: 64Mi
         - name: mcp-proxy
-          image: ghcr.io/tbxark/mcp-proxy:v0.43.2
+          image: python:3.12-slim
+          command:
+            - /bin/sh
+            - -c
+            - |
+              pip install --no-cache-dir "fastmcp[server]" httpx && \
+              python /app/proxy.py
           ports:
             - containerPort: 9090
               name: proxy
           volumeMounts:
             - name: config
-              mountPath: /config/config.json
-              subPath: config.json
+              mountPath: /app/proxy.py
+              subPath: proxy.py
           resources:
             requests:
               cpu: 100m
@@ -72,3 +78,22 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
+          startupProbe:
+            httpGet:
+              path: /mcp
+              port: 9090
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /mcp
+              port: 9090
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /mcp
+              port: 9090
+            periodSeconds: 10
+            failureThreshold: 3
