@@ -80,20 +80,20 @@ spec:
               memory: 256Mi
           startupProbe:
             httpGet:
-              path: /mcp
+              path: /health
               port: 9090
             initialDelaySeconds: 30
             periodSeconds: 5
             failureThreshold: 30
           livenessProbe:
             httpGet:
-              path: /mcp
+              path: /health
               port: 9090
             periodSeconds: 30
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /mcp
+              path: /health
               port: 9090
             periodSeconds: 10
             failureThreshold: 3
