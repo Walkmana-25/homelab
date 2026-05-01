@@ -6,11 +6,10 @@ metadata:
     app.kubernetes.io/name: mcp-proxy
 data:
   proxy.py: |
-    from fastmcp import FastMCP
+    from fastmcp import FastMCP, Client
+    from fastmcp.client.transports import StreamableHttpTransport
     from fastmcp.server import create_proxy
     from starlette.responses import JSONResponse
-
-
     import os
 
     # --- MCP upstream servers configuration ---
@@ -51,7 +50,12 @@ data:
 
     for name, server_config in MCP_SERVERS.items():
         headers = server_config.get("headers")
-        proxy = create_proxy(server_config["url"], name=name, headers=headers)
+        if headers:
+            transport = StreamableHttpTransport(url=server_config["url"], headers=headers)
+            client = Client(transport=transport)
+            proxy = create_proxy(client, name=name)
+        else:
+            proxy = create_proxy(server_config["url"], name=name)
         exclude = server_config.get("exclude_tools", [])
         if exclude:
             proxy.disable(names=set(exclude))
