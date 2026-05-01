@@ -112,12 +112,24 @@ spec:
                   baseURL: 'https://api.z.ai/api/coding/paas/v4'
                   models:
                     default:
-                      - 'glm-5.1'
-                      - 'glm-5'
-                      - 'glm-5-turbo'
-                      - 'glm-4.7'
-                      - 'glm-4.6v'
-                      - 'glm-4.5-air'
+                      - name: 'glm-5.1'
+                        maxContextTokens: 200000
+                        maxOutputTokens: 128000
+                      - name: 'glm-5'
+                        maxContextTokens: 200000
+                        maxOutputTokens: 128000
+                      - name: 'glm-5-turbo'
+                        maxContextTokens: 200000
+                        maxOutputTokens: 128000
+                      - name: 'glm-4.7'
+                        maxContextTokens: 200000
+                        maxOutputTokens: 128000
+                      - name: 'glm-4.6v'
+                        maxContextTokens: 200000
+                        maxOutputTokens: 128000
+                      - name: 'glm-4.5-air'
+                        maxContextTokens: 200000
+                        maxOutputTokens: 128000
                     fetch: true
                   titleConvo: true
                   titleModel: 'glm-4.5-air'
@@ -126,7 +138,10 @@ spec:
                   apiKey: '${INIAD_API_KEY}'
                   baseURL: '${INIAD_BASE_URL}'
                   models:
-                    default: ["gpt-5.4-mini"]
+                    default:
+                      - name: 'gpt-5.4-mini'
+                        maxContextTokens: 128000
+                        maxOutputTokens: 16384
                     fetch: true
                   titleConvo: true
                   titleModel: 'current_model'
@@ -135,7 +150,10 @@ spec:
                   apiKey: '${INIAD_API_KEY}'
                   baseURL: '${INIAD_CLAUDE_URL}'
                   models:
-                    default: ["claude-sonnet-4-6"]
+                    default:
+                      - name: 'claude-sonnet-4-6'
+                        maxContextTokens: 200000
+                        maxOutputTokens: 64000
                     fetch: true
                   titleConvo: true
                   titleModel: 'current_model'
