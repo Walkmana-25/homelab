@@ -14,9 +14,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://grafana.github.io/helm-charts
+    repoURL: https://fluent.github.io/helm-charts
     chart: fluent-bit
-    targetRevision: 2.10.0
+    targetRevision: 0.57.7
     helm:
       values: |
         config:
