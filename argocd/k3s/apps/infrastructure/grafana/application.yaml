@@ -100,6 +100,33 @@ spec:
           ingressClassName: cloudflare-tunnel
           hosts:
             - grafana-k8s.lapis-dev.work
+        alerting:
+          contactpoints.yaml:
+            apiVersion: 1
+            contactPoints:
+              - orgId: 1
+                name: discord-alerts
+                receivers:
+                  - uid: discord-receiver
+                    type: discord
+                    settings:
+                      url: $DISCORD_WEBHOOK_URL
+                      message: |
+                        {{ template "default.message" . }}
+          policies.yaml:
+            apiVersion: 1
+            policies:
+              - orgId: 1
+                receiver: discord-receiver
+                group_by: ['...']
+                group_wait: 30s
+                group_interval: 5m
+                repeat_interval: 4h
+        envValueFrom:
+          DISCORD_WEBHOOK_URL:
+            secretKeyRef:
+              name: grafana-alerting-secrets
+              key: discord-webhook-url
 
   destination:
     server: https://kubernetes.default.svc
