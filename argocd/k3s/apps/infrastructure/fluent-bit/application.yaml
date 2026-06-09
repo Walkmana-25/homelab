@@ -1,0 +1,83 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fluent-bit
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: infrastructure
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: fluent-bit
+    targetRevision: 2.10.0
+    helm:
+      values: |
+        config:
+          service: |
+            [SERVICE]
+                Flush         10
+                Log_Level     info
+                Daemon        off
+                Parsers_File  parsers.conf
+                HTTP_Server   On
+                HTTP_Listen   0.0.0.0
+                HTTP_Port     2020
+          inputs: |
+            [INPUT]
+                Name              tail
+                Path              /var/log/containers/*.log
+                multiline.parser  docker, cri
+                Tag               kube.*
+                Mem_Buf_Limit     5MB
+                Skip_Long_Lines   On
+          filters: |
+            [FILTER]
+                Name                kubernetes
+                Match               kube.*
+                Merge_Log           On
+                Keep_Log            Off
+                K8S-Logging.Parser  On
+                K8S-Logging.Exclude On
+          outputs: |
+            [OUTPUT]
+                Name          loki
+                Match         *
+                URL           http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+                Labels        job=fluent-bit
+                AutoKubernetesLabels on
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+  ignoreDifferences:
+    - group: apps
+      kind: DaemonSet
+      jsonPointers:
+        - /metadata/annotations/deprecated.daemonset.template.generation

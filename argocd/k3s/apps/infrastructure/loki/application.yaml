@@ -14,32 +14,103 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://grafana.github.io/helm-charts
-    chart: loki-stack
-    targetRevision: 2.10.2
+    repoURL: https://grafana-community.github.io/helm-charts
+    chart: loki
+    targetRevision: 17.2.0
     helm:
       values: |
+        fullnameOverride: "loki"
+
+        deploymentMode: Monolithic
+
         loki:
+          commonConfig:
+            replication_factor: 1
+            path_prefix: /var/loki
+          schemaConfig:
+            configs:
+              - from: "2024-04-01"
+                store: tsdb
+                object_store: filesystem
+                schema: v13
+                index:
+                  prefix: index_
+                  period: 24h
+          storage:
+            type: filesystem
+          storage_config:
+            filesystem:
+              chunks_directory: /var/loki/chunks
+              rules_directory: /var/loki/rules
+          auth_enabled: false
+          # NOTE: Migration from loki-stack requires fresh data.
+          # Old PVC data is not compatible with the new chart's storage format.
           limits_config:
+            reject_old_samples: true
+            reject_old_samples_max_age: 168h
             volume_enabled: true
+
+        singleBinary:
+          replicas: 1
           persistence:
             enabled: true
-            storageClassName: nfs
+            storageClass: nfs
             size: 32Gi
-        promtail:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+
+        # Disable all other deployment modes
+        backend:
+          replicas: 0
+        read:
+          replicas: 0
+        write:
+          replicas: 0
+        ingester:
+          replicas: 0
+        querier:
+          replicas: 0
+        queryFrontend:
+          replicas: 0
+        queryScheduler:
+          replicas: 0
+        distributor:
+          replicas: 0
+        compactor:
+          replicas: 0
+        indexGateway:
+          replicas: 0
+        bloomPlanner:
+          replicas: 0
+        bloomBuilder:
+          replicas: 0
+        bloomGateway:
+          replicas: 0
+
+        # Disable gateway - use Loki directly on port 3100
+        gateway:
           enabled: false
-        fluent-bit:
-          enabled: true
-          config:
-            service: |
-              [SERVICE]
-                  Flush         10
-                  Log_Level     info
-                  Daemon        off
-                  Parsers_File  parsers.conf
-                  HTTP_Server   On
-                  HTTP_Listen   0.0.0.0
-                  HTTP_Port     2020
+
+        # Disable loki canary
+        lokiCanary:
+          enabled: false
+
+        # Disable minio
+        minio:
+          enabled: false
+
+        # Disable rollout operator
+        rollout_operator:
+          enabled: false
+
+        # Disable enterprise features
+        enterprise:
+          enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
@@ -57,8 +128,4 @@ spec:
       backoff:
         duration: 5s
         factor: 2
-  ignoreDifferences:
-    - group: apps
-      kind: DaemonSet
-      jsonPointers:
-        - /metadata/annotations/deprecated.daemonset.template.generation
+        maxDuration: 3m
