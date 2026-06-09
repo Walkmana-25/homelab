@@ -81,8 +81,7 @@ spec:
           enabled: true
           auth:
             redisPassword: changeme
-          replica:
-            replicaCount: 0
+          replicas: 1
 
         # PostgreSQL (CloudNativePG - deployed via dawarich-postgres in the same namespace)
         postgresql:
