@@ -49,9 +49,9 @@ spec:
             [OUTPUT]
                 Name          loki
                 Match         *
-                URL           http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
-                Labels        job=fluent-bit
-                AutoKubernetesLabels on
+                uri           http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+                labels        job=fluent-bit
+                auto_kubernetes_labels on
         resources:
           requests:
             cpu: 50m
