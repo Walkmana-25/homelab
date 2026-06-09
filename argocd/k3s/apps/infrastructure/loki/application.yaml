@@ -20,6 +20,8 @@ spec:
     helm:
       values: |
         loki:
+          limits_config:
+            volume_enabled: true
           persistence:
             enabled: true
             storageClassName: nfs
