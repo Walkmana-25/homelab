@@ -40,8 +40,7 @@ spec:
             type: filesystem
           storage_config:
             filesystem:
-              chunks_directory: /var/loki/chunks
-              rules_directory: /var/loki/rules
+              directory: /var/loki/chunks
           auth_enabled: false
           # NOTE: Migration from loki-stack requires fresh data.
           # Old PVC data is not compatible with the new chart's storage format.
@@ -91,6 +90,12 @@ spec:
           replicas: 0
         bloomGateway:
           replicas: 0
+
+        # Disable memcached caches (not needed for small homelab)
+        chunksCache:
+          enabled: false
+        resultsCache:
+          enabled: false
 
         # Disable gateway - use Loki directly on port 3100
         gateway:
