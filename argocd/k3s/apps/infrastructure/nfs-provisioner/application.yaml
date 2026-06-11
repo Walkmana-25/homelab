@@ -24,15 +24,15 @@ spec:
           path: /srv/nfs/k3s
         storageClass:
           name: nfs
-          defaultClass: false
+          defaultClass: true
           reclaimPolicy: Retain
         resources:
           requests:
             cpu: 10m
             memory: 32Mi
           limits:
-            cpu: 50m
-            memory: 64Mi
+            cpu: 10m
+            memory: 32Mi
   destination:
     server: https://kubernetes.default.svc
     namespace: nfs-provisioner
