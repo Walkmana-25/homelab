@@ -16,7 +16,7 @@ spec:
   source:
     repoURL: https://grafana-community.github.io/helm-charts
     chart: loki
-    targetRevision: 17.2.0
+    targetRevision: 17.3.1
     helm:
       values: |
         fullnameOverride: "loki"
