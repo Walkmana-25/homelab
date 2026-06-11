@@ -27,7 +27,7 @@ spec:
           createDefaultDiskLabeledNodes: false
           defaultDataPath: /mnt/longhorn
         persistence:
-          defaultClass: true
+          defaultClass: false
           defaultClassReplicaCount: 1
           defaultFsType: ext4
         longhornUI:
