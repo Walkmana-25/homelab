@@ -44,6 +44,7 @@
         release_namespace: "{{ argocd_namespace }}"
         chart_version: "{{ argocd_chart_version }}"
         kubeconfig: "{{ kubeconfig_path }}"
+        update_repo_cache: true
         wait: true
         values:
           server:
