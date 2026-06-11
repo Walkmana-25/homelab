@@ -1,4 +1,4 @@
-.PHONY: ping deploy-staging deploy-production inventory-list ping-nfs deploy-nfs restart-nfs install-requirements ping-k3s install-k3s upgrade-k3s reboot-k3s deploy-argocd copy-kubeconfig check lint install-lint deploy-longhorn deploy-nfs-client
+.PHONY: ping deploy-staging deploy-production inventory-list ping-nfs deploy-nfs restart-nfs install-requirements ping-k3s install-k3s upgrade-k3s reboot-k3s deploy-argocd copy-kubeconfig check lint install-lint deploy-longhorn deploy-nfs-client ping-router deploy-router
 
 install-lint:
 	pip install --break-system-packages -r requirements.txt
@@ -69,3 +69,9 @@ deploy-argocd:
 
 copy-kubeconfig:
 	ansible-playbook -vv -i inventories/k3s/inventory.yml playbooks/fetch-kubeconfig.yml
+
+ping-router:
+	ansible -vv k3s_router -i inventories/k3s/inventory-router.yml -m ping
+
+deploy-router:
+	ansible-playbook -vv -i inventories/k3s/inventory-router.yml playbooks/router.yml

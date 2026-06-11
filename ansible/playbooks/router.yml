@@ -1,0 +1,94 @@
+---
+- name: Configure k3s-router as NAT gateway
+  hosts: k3s_router
+  become: true
+  tasks:
+    - name: Ensure IP forwarding is enabled persistently
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: "1"
+        state: present
+        reload: true
+        sysctl_file: /etc/sysctl.d/99-ip-forward.conf
+
+    - name: Install iptables-persistent
+      ansible.builtin.apt:
+        name:
+          - iptables
+          - iptables-persistent
+        state: present
+        update_cache: true
+
+    - name: Configure netplan - fix default gateway to 172.19.0.1 via eth0
+      ansible.builtin.copy:
+        content: |
+          network:
+            version: 2
+            ethernets:
+              eth0:
+                match:
+                  macaddress: "bc:24:11:0c:35:d4"
+                dhcp4: true
+                set-name: "eth0"
+                routes:
+                  - to: default
+                    via: 172.19.0.1
+              eth1:
+                match:
+                  macaddress: "bc:24:11:0b:0e:34"
+                dhcp4: true
+                dhcp4-overrides:
+                  use-routes: false
+                set-name: "eth1"
+              eth2:
+                match:
+                  macaddress: "bc:24:11:2d:8b:cd"
+                dhcp4: true
+                dhcp4-overrides:
+                  use-routes: false
+                set-name: "eth2"
+        dest: /etc/netplan/51-router-gateway.yaml
+        owner: root
+        group: root
+        mode: "0600"
+      notify: Apply netplan
+
+    - name: Remove conflicting netplan defaults from cloud-init
+      ansible.builtin.file:
+        path: /etc/netplan/50-cloud-init.yaml
+        state: absent
+      notify: Apply netplan
+
+    - name: Configure NAT masquerade for k8s cluster network
+      ansible.builtin.iptables:
+        table: nat
+        chain: POSTROUTING
+        source: "10.2.0.0/24"
+        out_interface: eth0
+        jump: MASQUERADE
+        comment: "NAT for k8s cluster network"
+
+    - name: Allow forwarding from k8s network to upstream
+      ansible.builtin.iptables:
+        chain: FORWARD
+        in_interface: eth2
+        out_interface: eth0
+        jump: ACCEPT
+        comment: "Allow k8s to upstream"
+
+    - name: Allow forwarding from upstream to k8s network (established)
+      ansible.builtin.iptables:
+        chain: FORWARD
+        in_interface: eth0
+        out_interface: eth2
+        ctstate: ESTABLISHED,RELATED
+        jump: ACCEPT
+        comment: "Allow upstream to k8s (established)"
+
+    - name: Save iptables rules
+      ansible.builtin.shell: netfilter-persistent save
+      changed_when: true
+  handlers:
+    - name: Apply netplan
+      ansible.builtin.command: netplan apply
+      changed_when: true

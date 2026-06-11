@@ -1,0 +1,7 @@
+---
+k3s_router:
+  hosts:
+    k3s-router.k8s.cloud-milky.solufit.net:
+  vars:
+    ansible_port: 22
+    ansible_user: ubuntu
