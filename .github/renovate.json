@@ -38,7 +38,8 @@
       "managerFilePatterns": ["/^ansible/playbooks/argocd\\.yml$/"],
       "matchStrings": ["argocd_chart_version:\\s*(?<currentValue>\\S+)"],
       "depNameTemplate": "argo/argo-cd",
-      "datasourceTemplate": "helm"
+      "datasourceTemplate": "helm",
+      "registryUrlTemplate": "https://argoproj.github.io/argo-helm"
     }
   ],
   "packageRules": [
