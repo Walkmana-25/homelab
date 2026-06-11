@@ -104,7 +104,7 @@ spec:
             apiVersion: 1
             policies:
               - orgId: 1
-                receiver: discord-receiver
+                receiver: discord-alerts
                 group_by: ['...']
                 group_wait: 30s
                 group_interval: 5m
