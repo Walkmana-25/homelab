@@ -17,7 +17,6 @@ spec:
     repoURL: https://github.com/Walkmana-25/homelab.git
     path: argocd/k3s/apps/infrastructure/metallb/config
     targetRevision: main
-    kustomize: {}
   destination:
     server: https://kubernetes.default.svc
     namespace: metallb-system
