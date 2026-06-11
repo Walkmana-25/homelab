@@ -55,19 +55,6 @@ spec:
             loki:
               gnetId: 22874
               revision: 3
-        dashboardProviders:
-          dashboardproviders.yaml:
-            apiVersion: 1
-            providers:
-              - name: default
-                orgId: 1
-                folder: ""
-                type: file
-                disableDeletion: false
-                editable: true
-                options:
-                  path: /var/lib/grafana/dashboards/default
-                  foldersFromFilesStructure: false
 
         persistence:
           enabled: true
@@ -112,7 +99,7 @@ spec:
                     settings:
                       url: $DISCORD_WEBHOOK_URL
                       message: |
-                        {{ template "default.message" . }}
+                        {{`{{ template "default.message" . }}`}}
           policies.yaml:
             apiVersion: 1
             policies:
