@@ -26,6 +26,8 @@ spec:
           defaultReplicaCount: 1
           createDefaultDiskLabeledNodes: false
           defaultDataPath: /mnt/longhorn
+          guaranteedInstanceManagerCPU: 5
+          
         persistence:
           defaultClass: false
           defaultClassReplicaCount: 1
