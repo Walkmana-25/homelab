@@ -9,19 +9,12 @@
   ],
   "enabledManagers": [
     "argocd",
-    "helm-values",
     "github-actions",
-    "ansible",
     "custom.regex"
   ],
   "argocd": {
     "managerFilePatterns": [
       "/argocd/k3s/application-.+\\.ya?ml$/",
-      "/argocd/k3s/apps/.+/application\\.ya?ml$/"
-    ]
-  },
-  "helm-values": {
-    "managerFilePatterns": [
       "/argocd/k3s/apps/.+/application\\.ya?ml$/"
     ]
   },
@@ -37,7 +30,7 @@
       "customType": "regex",
       "managerFilePatterns": ["/^ansible/playbooks/argocd\\.yml$/"],
       "matchStrings": ["argocd_chart_version:\\s*(?<currentValue>\\S+)"],
-      "depNameTemplate": "argo/argo-cd",
+      "depNameTemplate": "argo-cd",
       "datasourceTemplate": "helm",
       "registryUrlTemplate": "https://argoproj.github.io/argo-helm"
     }
