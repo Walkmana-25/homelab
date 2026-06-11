@@ -1,0 +1,77 @@
+---
+- name: Create {{ node_exporter_group }} system group
+  ansible.builtin.group:
+    name: "{{ node_exporter_group }}"
+    system: true
+    state: present
+  become: true
+
+- name: Create {{ node_exporter_user }} system user
+  ansible.builtin.user:
+    name: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+  become: true
+
+- name: Download node_exporter tarball
+  ansible.builtin.get_url:
+    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    dest: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    mode: "0644"
+  become: true
+
+- name: Extract node_exporter tarball
+  ansible.builtin.unarchive:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    dest: /tmp/
+    remote_src: true
+  become: true
+
+- name: Copy node_exporter binary to {{ node_exporter_binary_path }}
+  ansible.builtin.copy:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+    dest: "{{ node_exporter_binary_path }}"
+    remote_src: true
+    owner: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
+    mode: "0755"
+  become: true
+
+- name: Clean up downloaded tarball and extracted directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop:
+    - "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    - "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64"
+
+- name: Create node_exporter systemd unit file
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Restart node_exporter
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
+- name: Enable and start node_exporter service
+  ansible.builtin.systemd:
+    name: node_exporter
+    state: started
+    enabled: true
+  become: true
+
+- name: Wait for node_exporter to be listening on port 9100
+  ansible.builtin.wait_for:
+    port: 9100
+    delay: 2
+    timeout: 30

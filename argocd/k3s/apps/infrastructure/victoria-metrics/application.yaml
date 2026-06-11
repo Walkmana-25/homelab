@@ -22,6 +22,15 @@ spec:
         vmagent:
           spec:
             scrapeInterval: 60s
+            inlineScrapeConfig: |
+              - job_name: "node-exporter-external"
+                static_configs:
+                  - targets:
+                      - "k3s-nfs.k8s.cloud-milky.solufit.net:9100"
+                      - "k3s-router.k8s.cloud-milky.solufit.net:9100"
+                    labels:
+                      cluster: k3s
+                      node_type: bare-metal
         grafana:
           enabled: false
         defaultDashboardsEnabled: true

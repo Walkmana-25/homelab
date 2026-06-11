@@ -1,0 +1,6 @@
+---
+- name: Install and configure Node Exporter on external nodes
+  hosts: nfs_servers:k3s_router
+  become: true
+  roles:
+    - role: node_exporter
