@@ -32,6 +32,13 @@
       "matchStrings": ["uses: (?<depName>[^@]+)@(?<currentValue>[^\\s]+)"],
       "datasourceTemplate": "github-tags",
       "versioningTemplate": "semver-coerced"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^ansible/playbooks/argocd\\.yml$/"],
+      "matchStrings": ["argocd_chart_version:\\s*(?<currentValue>\\S+)"],
+      "depNameTemplate": "argo/argo-cd",
+      "datasourceTemplate": "helm"
     }
   ],
   "packageRules": [
