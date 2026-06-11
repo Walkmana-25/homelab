@@ -28,11 +28,11 @@ spec:
           reclaimPolicy: Retain
         resources:
           requests:
-            cpu: 10m
-            memory: 32Mi
+            cpu: 30m
+            memory: 64Mi
           limits:
-            cpu: 10m
-            memory: 32Mi
+            cpu: 30m
+            memory: 64Mi
   destination:
     server: https://kubernetes.default.svc
     namespace: nfs-provisioner
