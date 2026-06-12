@@ -1,0 +1,71 @@
+---
+- name: Install prerequisites
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - gnupg2
+      - curl
+    state: present
+    update_cache: true
+  become: true
+
+- name: Create keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Download Fluent Bit GPG key
+  ansible.builtin.get_url:
+    url: https://packages.fluentbit.io/fluentbit.key
+    dest: /etc/apt/keyrings/fluentbit.gpg
+    mode: "0644"
+  become: true
+
+- name: Add Fluent Bit APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/fluentbit.gpg] https://packages.fluentbit.io/ubuntu/{{ ansible_lsb.codename }} {{ ansible_lsb.codename }} main"
+    filename: fluent-bit
+    state: present
+    update_cache: true
+  become: true
+
+- name: Install fluent-bit
+  ansible.builtin.apt:
+    name: fluent-bit
+    state: present
+  become: true
+
+- name: Create Fluent Bit config directory
+  ansible.builtin.file:
+    path: "{{ fluent_bit_config_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Deploy Fluent Bit configuration
+  ansible.builtin.template:
+    src: fluent-bit.conf.j2
+    dest: "{{ fluent_bit_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Restart fluent-bit
+
+- name: Add fluent-bit user to systemd-journal group
+  ansible.builtin.user:
+    name: "{{ fluent_bit_user }}"
+    groups: systemd-journal
+    append: true
+  become: true
+
+- name: Enable and start fluent-bit service
+  ansible.builtin.systemd:
+    name: fluent-bit
+    state: started
+    enabled: true
+  become: true

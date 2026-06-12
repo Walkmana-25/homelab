@@ -37,6 +37,14 @@ spec:
                 Tag               kube.*
                 Mem_Buf_Limit     5MB
                 Skip_Long_Lines   On
+
+            [INPUT]
+                Name              systemd
+                Tag               host.*
+                Path              /var/log/journal
+                Read_From_Tail    On
+                Mem_Buf_Limit     5MB
+                Strip_Underscores On
           filters: |
             [FILTER]
                 Name                kubernetes
@@ -45,14 +53,33 @@ spec:
                 Keep_Log            Off
                 K8S-Logging.Parser  On
                 K8S-Logging.Exclude On
+
+            [FILTER]
+                Name                modify
+                Match               kube.*
+                Add                 log_type container
+
+            [FILTER]
+                Name                modify
+                Match               host.*
+                Add                 log_type syslog
           outputs: |
             [OUTPUT]
                 Name          loki
                 Match         *
                 Host          loki.monitoring.svc.cluster.local
                 Port          3100
-                labels        job=fluent-bit
+                labels        job=fluent-bit, log_type=$log_type
                 auto_kubernetes_labels on
+        extraVolumes:
+          - name: journal
+            hostPath:
+              path: /var/log/journal
+              type: DirectoryOrCreate
+        extraVolumeMounts:
+          - name: journal
+            mountPath: /var/log/journal
+            readOnly: true
         resources:
           requests:
             cpu: 50m

@@ -1,0 +1,15 @@
+---
+all:
+  children:
+    nfs_servers:
+      hosts:
+        k3s-nfs.k8s.cloud-milky.solufit.net:
+      vars:
+        ansible_user: ubuntu
+        ansible_port: 22
+    k3s_router:
+      hosts:
+        k3s-router.k8s.cloud-milky.solufit.net:
+      vars:
+        ansible_user: ubuntu
+        ansible_port: 22

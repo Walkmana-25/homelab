@@ -1,0 +1,26 @@
+[SERVICE]
+    Flush         10
+    Log_Level     info
+    Daemon        off
+    Parsers_File  parsers.conf
+
+[INPUT]
+    Name              systemd
+    Tag               host.*
+    Path              /var/log/journal
+    Read_From_Tail    On
+    Mem_Buf_Limit     5MB
+    Strip_Underscores On
+
+[FILTER]
+    Name              modify
+    Match             host.*
+    Add               log_type syslog
+    Add               hostname {{ ansible_hostname }}
+
+[OUTPUT]
+    Name              loki
+    Match             *
+    Host              {{ fluent_bit_loki_host }}
+    Port              {{ fluent_bit_loki_port }}
+    labels            job=fluent-bit, log_type=$log_type, hostname=$hostname

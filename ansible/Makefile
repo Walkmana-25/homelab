@@ -1,4 +1,4 @@
-.PHONY: ping deploy-staging deploy-production inventory-list ping-nfs deploy-nfs restart-nfs install-requirements ping-k3s install-k3s upgrade-k3s reboot-k3s deploy-argocd copy-kubeconfig check lint install-lint deploy-longhorn deploy-nfs-client ping-router deploy-router ping-node-exporter deploy-node-exporter restart-node-exporter
+.PHONY: ping deploy-staging deploy-production inventory-list ping-nfs deploy-nfs restart-nfs install-requirements ping-k3s install-k3s upgrade-k3s reboot-k3s deploy-argocd copy-kubeconfig check lint install-lint deploy-longhorn deploy-nfs-client ping-router deploy-router ping-node-exporter deploy-node-exporter restart-node-exporter ping-fluent-bit deploy-fluent-bit restart-fluent-bit
 
 install-lint:
 	pip install --break-system-packages -r requirements.txt
@@ -17,6 +17,7 @@ check: lint
 	ansible-inventory -vv -i inventories/k3s/inventory-nfs.yml --list > /dev/null
 	ansible-inventory -vv -i inventories/k3s/inventory-router.yml --list > /dev/null
 	ansible-inventory -vv -i inventories/k3s/inventory-node-exporter.yml --list > /dev/null
+	ansible-inventory -vv -i inventories/k3s/inventory-fluent-bit.yml --list > /dev/null
 	@echo "All checks passed!"
 
 install-requirements:
@@ -86,3 +87,12 @@ deploy-node-exporter:
 
 restart-node-exporter:
 	ansible -vv nfs_servers:k3s_router -i inventories/k3s/inventory-node-exporter.yml -m ansible.builtin.systemd -a "name=node_exporter state=restarted" --become
+
+ping-fluent-bit:
+	ansible -vv nfs_servers:k3s_router -i inventories/k3s/inventory-fluent-bit.yml -m ping
+
+deploy-fluent-bit:
+	ansible-playbook -vv -i inventories/k3s/inventory-fluent-bit.yml playbooks/fluent-bit.yml
+
+restart-fluent-bit:
+	ansible -vv nfs_servers:k3s_router -i inventories/k3s/inventory-fluent-bit.yml -m ansible.builtin.systemd -a "name=fluent-bit state=restarted" --become
