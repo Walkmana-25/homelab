@@ -5,7 +5,7 @@
   vars:
     homelab_root: "{{ playbook_dir | dirname | dirname }}"
     argocd_namespace: argocd
-    argocd_chart_version: 9.5.19 # You can update this to the latest version
+    argocd_chart_version: 9.7.1 # You can update this to the latest version
     kubeconfig_path: /etc/rancher/k3s/k3s.yaml
 
   tasks:
