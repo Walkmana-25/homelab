@@ -9,3 +9,4 @@ resources:
   - mcp-proxy
   - searxng-mcp
   - searxng
+  - simpleapp
