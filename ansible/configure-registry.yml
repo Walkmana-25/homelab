@@ -1,0 +1,70 @@
+---
+# Warm-only playbook: configures Harbor registry authentication on k3s nodes.
+# Run AFTER Harbor is deployed (SealedSecret must exist).
+# Cold-start (make install-k3s) does NOT use this — Harbor doesn't exist yet.
+#
+# Usage: make configure-registry
+- name: Configure Harbor registry authentication on k3s nodes
+  hosts: k3s_cluster
+  become: true
+  vars:
+    registry_secret_name: harbor-registry-auth
+    registry_secret_namespace: harbor
+    registry_original_host: harbor-k3s.lapis-dev.work
+    registry_mirror_endpoint: http://harbor-core.harbor.svc.cluster.local
+
+  tasks:
+    - name: Fetch registry credentials from Kubernetes Secret
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Secret
+        name: "{{ registry_secret_name }}"
+        namespace: "{{ registry_secret_namespace }}"
+      delegate_to: localhost
+      run_once: true
+      register: registry_secret
+
+    - name: Fail when registry secret not found (Harbor not deployed?)
+      ansible.builtin.fail:
+        msg: >-
+          Secret {{ registry_secret_name }} not found in namespace
+          {{ registry_secret_namespace }}. Deploy Harbor first
+          (ArgoCD sync), then run this playbook.
+      when: registry_secret.resources | length == 0
+
+    - name: Set registry credentials from secret
+      ansible.builtin.set_fact:
+        registry_username: "{{ _reg.username | b64decode }}"
+        registry_password: "{{ _reg.password | b64decode }}"
+      vars:
+        _reg: "{{ registry_secret.resources[0].data }}"
+
+    - name: Determine k3s service name
+      ansible.builtin.set_fact:
+        _k3s_svc: >-
+          {{ 'k3s-agent'
+          if inventory_hostname in groups['agent'] else 'k3s' }}
+
+    - name: Deploy registries.yaml to nodes
+      ansible.builtin.copy:
+        content: |
+          mirrors:
+            {{ registry_original_host }}:
+              endpoint:
+                - "{{ registry_mirror_endpoint }}"
+          configs:
+            {{ registry_original_host }}:
+              auth:
+                username: {{ registry_username }}
+                password: {{ registry_password }}
+        dest: /etc/rancher/k3s/registries.yaml
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart k3s
+
+  handlers:
+    - name: Restart k3s
+      ansible.builtin.systemd:
+        name: "{{ _k3s_svc }}"
+        state: restarted
