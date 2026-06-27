@@ -5,4 +5,5 @@ resources:
   - namespace.yaml
   - harbor-secret.yaml
   - harbor-registry-auth.yaml
+  - harbor-image-pull-secret.yaml
   - application.yaml
