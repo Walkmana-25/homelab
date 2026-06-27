@@ -1,0 +1,14 @@
+{
+  "features": {
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1": {
+      "version": "1.0.5",
+      "resolved": "ghcr.io/anthropics/devcontainer-features/claude-code@sha256:cfc2e7d3e9fd3b9b01f8d5cb158508a884c8c0ede2e23ed10f32dea5d4ffe69a",
+      "integrity": "sha256:cfc2e7d3e9fd3b9b01f8d5cb158508a884c8c0ede2e23ed10f32dea5d4ffe69a"
+    },
+    "ghcr.io/dirien/devcontainer-features/opencode:0": {
+      "version": "0.0.7",
+      "resolved": "ghcr.io/dirien/devcontainer-features/opencode@sha256:5508ee25a18cdf13daf5b5849513305558b3b8ba41f6977ea68cd2ad2268ba2b",
+      "integrity": "sha256:5508ee25a18cdf13daf5b5849513305558b3b8ba41f6977ea68cd2ad2268ba2b"
+    }
+  }
+}

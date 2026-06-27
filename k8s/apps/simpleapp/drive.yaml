@@ -1,0 +1,63 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: drive-1
+  namespace: simpleapp
+spec:
+  schedule: "0,30 0-16,21-23 * * *" # 17:00 ~ 20:00 every 10, other , every hour
+  timezone: Asia/Tokyo
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: drive
+            image: harbor-k3s.lapis-dev.work/apps/driving-school-bot:latest
+            imagePullPolicy: IfNotPresent
+          imagePullSecrets:
+          - name: registry
+          restartPolicy: OnFailure
+          
+
+---
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: drive-2
+  namespace: simpleapp
+spec:
+  schedule: "*/10 17-19 * * *" # 17:00 ~ 20:00 every 10, other , every hour
+  timezone: Asia/Tokyo
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: drive
+            image: harbor-k3s.lapis-dev.work/apps/driving-school-bot:latest
+            imagePullPolicy: IfNotPresent
+          imagePullSecrets:
+          - name: registry
+          restartPolicy: OnFailure
+          
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: drive-2
+  namespace: simpleapp
+spec:
+  schedule: "0,30 0-16,21-23 * * *" # 17:00 ~ 20:00 every 10, other , every hour
+  timezone: Asia/Tokyo
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: drive
+            image: harbor-k3s.lapis-dev.work/apps/driving-school-bot:latest
+            imagePullPolicy: IfNotPresent
+          imagePullSecrets:
+          - name: registry
+          restartPolicy: OnFailure
