@@ -15,14 +15,17 @@
 
   tasks:
     - name: Fetch registry credentials from Kubernetes Secret
-      kubernetes.core.k8s_info:
-        api_version: v1
-        kind: Secret
-        name: "{{ registry_secret_name }}"
-        namespace: "{{ registry_secret_namespace }}"
+      ansible.builtin.command:
+        cmd: >-
+          kubectl get secret {{ registry_secret_name }}
+          -n {{ registry_secret_namespace }} -o jsonpath='{.data}'
       delegate_to: localhost
+      environment:
+        PATH: /home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin
+        KUBECONFIG: /home/ubuntu/.kube/config
       run_once: true
       register: registry_secret
+      changed_when: false
 
     - name: Fail when registry secret not found (Harbor not deployed?)
       ansible.builtin.fail:
@@ -30,14 +33,14 @@
           Secret {{ registry_secret_name }} not found in namespace
           {{ registry_secret_namespace }}. Deploy Harbor first
           (ArgoCD sync), then run this playbook.
-      when: registry_secret.resources | length == 0
+      when: registry_secret.rc != 0
 
     - name: Set registry credentials from secret
       ansible.builtin.set_fact:
-        registry_username: "{{ _reg.username | b64decode }}"
-        registry_password: "{{ _reg.password | b64decode }}"
+        registry_username: "{{ _data.username | b64decode }}"
+        registry_password: "{{ _data.password | b64decode }}"
       vars:
-        _reg: "{{ registry_secret.resources[0].data }}"
+        _data: "{{ registry_secret.stdout | from_json }}"
 
     - name: Determine k3s service name
       ansible.builtin.set_fact:
