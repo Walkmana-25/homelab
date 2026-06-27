@@ -1,0 +1,102 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: harbor
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: infrastructure
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://helm.goharbor.io
+    chart: harbor
+    targetRevision: 1.19.1
+    helm:
+      values: |
+        expose:
+          type: ingress
+          tls:
+            enabled: false          # Cloudflare terminates TLS at the edge
+          ingress:
+            hosts:
+              core: harbor-k3s.lapis-dev.work
+            controller: default
+            className: cloudflare-tunnel
+            # No cert-manager annotations and no proxy-body-size override:
+            # Cloudflare terminates TLS and enforces its own request limits.
+        externalURL: https://harbor-k3s.lapis-dev.work
+        # Admin password and secretKey are sourced from the SealedSecret
+        # `harbor-core-secret` (see harbor-secret.yaml). The internal
+        # PostgreSQL has no existing-secret option, so its password is set
+        # inline below.
+        existingSecretAdminPassword: harbor-core-secret
+        existingSecretAdminPasswordKey: HARBOR_ADMIN_PASSWORD
+        existingSecretSecretKey: harbor-core-secret
+        database:
+          type: internal
+          internal:
+            password: 685c1eacfe406c808400fbf11c2ec4d1aaec
+            shmSizeLimit: 512Mi
+        persistence:
+          enabled: true
+          resourcePolicy: keep
+          persistentVolumeClaim:
+            registry:
+              storageClass: nfs
+              accessMode: ReadWriteOnce
+              size: 20Gi
+            jobservice:
+              jobLog:
+                storageClass: nfs
+                accessMode: ReadWriteOnce
+                size: 5Gi
+            database:
+              storageClass: nfs
+              accessMode: ReadWriteOnce
+              size: 5Gi
+            redis:
+              storageClass: nfs
+              accessMode: ReadWriteOnce
+              size: 1Gi
+            trivy:
+              storageClass: nfs
+              accessMode: ReadWriteOnce
+              size: 5Gi
+          imageChartStorage:
+            type: filesystem
+            filesystem:
+              rootdirectory: /storage
+        updateStrategy:
+          type: Recreate
+        logLevel: info
+        trivy:
+          enabled: true
+        redis:
+          type: internal
+        internalTLS:
+          enabled: false
+        metrics:
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: harbor
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

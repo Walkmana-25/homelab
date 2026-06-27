@@ -29,7 +29,7 @@ k3s_cluster:
       --disable local-storage
       --disable servicelb
       --flannel-backend=host-gw
-      
+
     # extra_agent_args: ""
     # extra_install_envs: { 'INSTALL_K3S_SKIP_SELINUX_RPM': 'true' }
     # cluster_context: k3s-ansible
@@ -56,3 +56,23 @@ k3s_cluster:
     #   Containerd can be configured to connect to private registries and use them to pull images as needed by the kubelet.
     #   YAML here will be placed as the content of /etc/rancher/k3s/registries.yaml
     #   See https://docs.k3s.io/installation/private-registry
+    #
+    # Harbor private registry mirror. containerd resolves any pull of an image
+    # under harbor-k3s.lapis-dev.work against the IN-CLUSTER Harbor core service
+    # (namespace harbor, service harbor-core, port 80) instead of going out
+    # through the Cloudflare Tunnel. HTTP is intentional: internalTLS is off and
+    # the service is only reachable inside the cluster. The admin password must
+    # match the one in the Harbor SealedSecret
+    # (argocd/k3s/apps/infrastructure/harbor/harbor-secret.yaml). For better
+    # hygiene, replace the admin credentials below with a Harbor robot account
+    # that has only pull permission (see the harbor README.md, post-deploy setup).
+    registries_config_yaml: |
+      mirrors:
+        harbor-k3s.lapis-dev.work:
+          endpoint:
+            - "http://harbor-core.harbor.svc.cluster.local"
+      configs:
+        harbor-k3s.lapis-dev.work:
+          auth:
+            username: admin
+            password: Harbor12345
