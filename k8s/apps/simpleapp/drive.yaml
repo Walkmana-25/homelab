@@ -45,7 +45,7 @@ spec:
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: drive-2
+  name: drive-3
   namespace: simpleapp
 spec:
   schedule: "0,30 0-16,21-23 * * *" # 17:00 ~ 20:00 every 10, other , every hour
