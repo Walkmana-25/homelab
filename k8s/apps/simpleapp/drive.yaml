@@ -15,7 +15,7 @@ spec:
             image: harbor-k3s.lapis-dev.work/apps/driving-school-bot:latest
             imagePullPolicy: IfNotPresent
           imagePullSecrets:
-          - name: registry
+          - name: registry-sealed
           restartPolicy: OnFailure
 
 ---
@@ -37,5 +37,5 @@ spec:
             image: harbor-k3s.lapis-dev.work/apps/driving-school-bot:latest
             imagePullPolicy: IfNotPresent
           imagePullSecrets:
-          - name: registry
+          - name: registry-sealed
           restartPolicy: OnFailure

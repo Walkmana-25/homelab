@@ -13,6 +13,6 @@ spec:
     metadata:
       annotations:
         sealedsecrets.bitnami.com/cluster-wide: "true"
-      name: registry
+      name: registry-sealed
       namespace: simpleapp
     type: kubernetes.io/dockerconfigjson
