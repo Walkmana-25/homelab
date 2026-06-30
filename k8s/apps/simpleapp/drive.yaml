@@ -4,10 +4,13 @@ metadata:
   name: drive-1
   namespace: simpleapp
 spec:
-  schedule: "0,30 * * * *"
+  schedule: "0,30 8-23,0-1 * * *"
   timeZone: Asia/Tokyo
+  concurrencyPolicy: Forbid # ★二重起動を防ぐために追加
   jobTemplate:
     spec:
+      activeDeadlineSeconds: 300 # ★ Lを小文字に修正
+      backoffLimit: 1
       template:
         spec:
           containers:
@@ -28,8 +31,11 @@ metadata:
 spec:
   schedule: "10,20,40,50 9-20 * * *"
   timeZone: Asia/Tokyo
+  concurrencyPolicy: Forbid # ★二重起動を防ぐために追加
   jobTemplate:
     spec:
+      activeDeadlineSeconds: 300 # ★ Lを小文字に修正
+      backoffLimit: 1
       template:
         spec:
           containers:
