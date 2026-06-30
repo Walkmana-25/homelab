@@ -4,7 +4,7 @@ metadata:
   name: drive-1
   namespace: simpleapp
 spec:
-  schedule: "0,30 0-16,21-23 * * *"
+  schedule: "0,30 * * * *"
   timeZone: Asia/Tokyo
   jobTemplate:
     spec:
@@ -26,7 +26,7 @@ metadata:
   name: drive-2
   namespace: simpleapp
 spec:
-  schedule: "*/10 17-19 * * *"
+  schedule: "10,20,40,50 9-20 * * *"
   timeZone: Asia/Tokyo
   jobTemplate:
     spec:
