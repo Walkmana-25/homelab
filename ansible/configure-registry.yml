@@ -14,7 +14,7 @@
     registry_mirror_endpoint: http://harbor-core.harbor.svc.cluster.local
 
   tasks:
-    - name: Fetch registry credentials from Kubernetes Secret
+    - name: Fetch registry credentials from Kubernetes Secret # noqa: run-once[task]
       ansible.builtin.command:
         cmd: >-
           kubectl get secret {{ registry_secret_name }}

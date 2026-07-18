@@ -4,19 +4,19 @@
 - name: Check if block device exists
   ansible.builtin.stat:
     path: "{{ longhorn_block_device }}"
-  register: block_device_stat
+  register: block_device_stat # noqa: var-naming[no-role-prefix]
   become: true
   failed_when: not block_device_stat.stat.exists
 
 - name: Check if block device is already formatted
   ansible.builtin.command:
     cmd: blkid -o value -s TYPE {{ longhorn_block_device }}
-  register: block_device_fs
+  register: block_device_fs # noqa: var-naming[no-role-prefix]
   changed_when: false
   failed_when: false
   become: true
 
-- name: Format block device with {{ longhorn_filesystem_type }} filesystem
+- name: Format block device filesystem ({{ longhorn_filesystem_type }})
   community.general.filesystem:
     dev: "{{ longhorn_block_device }}"
     fstype: "{{ longhorn_filesystem_type }}"
