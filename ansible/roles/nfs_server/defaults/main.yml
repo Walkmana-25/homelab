@@ -1,8 +1,8 @@
 ---
-nfs_export_path: "/srv/nfs/k3s"
-nfs_allowed_network: "10.2.0.0/24"
+nfs_export_path: "/srv/nfs/k3s" # noqa: var-naming[no-role-prefix]
+nfs_allowed_network: "10.2.0.0/24" # noqa: var-naming[no-role-prefix]
 
 # Block device configuration for NFS storage
-nfs_block_device: "/dev/vda"
-nfs_filesystem_type: "btrfs"
-nfs_mount_point: "/srv/nfs"
+nfs_block_device: "/dev/vda" # noqa: var-naming[no-role-prefix]
+nfs_filesystem_type: "btrfs" # noqa: var-naming[no-role-prefix]
+nfs_mount_point: "/srv/nfs" # noqa: var-naming[no-role-prefix]

@@ -1,12 +1,12 @@
 ---
-- name: Create {{ node_exporter_group }} system group
+- name: Create system group {{ node_exporter_group }}
   ansible.builtin.group:
     name: "{{ node_exporter_group }}"
     system: true
     state: present
   become: true
 
-- name: Create {{ node_exporter_user }} system user
+- name: Create system user {{ node_exporter_user }}
   ansible.builtin.user:
     name: "{{ node_exporter_user }}"
     group: "{{ node_exporter_group }}"
@@ -17,7 +17,9 @@
 
 - name: Download node_exporter tarball
   ansible.builtin.get_url:
-    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    url: >-
+      https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version
+      }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
     dest: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
     mode: "0644"
   become: true

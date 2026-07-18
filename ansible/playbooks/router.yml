@@ -86,7 +86,7 @@
         comment: "Allow upstream to k8s (established)"
 
     - name: Save iptables rules
-      ansible.builtin.shell: netfilter-persistent save
+      ansible.builtin.command: netfilter-persistent save
       changed_when: true
   handlers:
     - name: Apply netplan

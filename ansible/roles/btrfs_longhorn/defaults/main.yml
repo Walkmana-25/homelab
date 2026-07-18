@@ -1,5 +1,5 @@
 ---
 # Block device configuration for Longhorn storage
-longhorn_block_device: "/dev/vda"
-longhorn_filesystem_type: "btrfs"
-longhorn_mount_point: "/mnt/longhorn"
+longhorn_block_device: "/dev/vda" # noqa: var-naming[no-role-prefix]
+longhorn_filesystem_type: "btrfs" # noqa: var-naming[no-role-prefix]
+longhorn_mount_point: "/mnt/longhorn" # noqa: var-naming[no-role-prefix]
