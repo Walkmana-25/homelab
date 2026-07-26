@@ -3,4 +3,5 @@ kind: Kustomization
 
 resources:
   - drive.yaml
+  - pvc.yaml
   - registry.yaml

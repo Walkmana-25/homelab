@@ -1,10 +1,10 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: drive-1
+  name: drive
   namespace: simpleapp
 spec:
-  schedule: "0,30 8-23,0-1 * * *"
+  schedule: "*/10 * * * *"
   timeZone: Asia/Tokyo
   concurrencyPolicy: Forbid # ★二重起動を防ぐために追加
   jobTemplate:
@@ -13,35 +13,24 @@ spec:
       backoffLimit: 1
       template:
         spec:
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
           containers:
           - name: drive
             image: harbor-k3s.lapis-dev.work/apps/driving-school-bot:latest
             imagePullPolicy: IfNotPresent
-          imagePullSecrets:
-          - name: registry-sealed
-          restartPolicy: OnFailure
-
----
-
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: drive-2
-  namespace: simpleapp
-spec:
-  schedule: "10,20,40,50 9-20 * * *"
-  timeZone: Asia/Tokyo
-  concurrencyPolicy: Forbid # ★二重起動を防ぐために追加
-  jobTemplate:
-    spec:
-      activeDeadlineSeconds: 300 # ★ Lを小文字に修正
-      backoffLimit: 1
-      template:
-        spec:
-          containers:
-          - name: drive
-            image: harbor-k3s.lapis-dev.work/apps/driving-school-bot:latest
-            imagePullPolicy: IfNotPresent
+            env:
+            - name: STATE_FILE
+              value: /data/prev_slots.json
+            volumeMounts:
+            - name: data
+              mountPath: /data
+          volumes:
+          - name: data
+            persistentVolumeClaim:
+              claimName: drive-data
           imagePullSecrets:
           - name: registry-sealed
           restartPolicy: OnFailure
