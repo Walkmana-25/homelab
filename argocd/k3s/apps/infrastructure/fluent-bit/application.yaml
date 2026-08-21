@@ -16,7 +16,7 @@ spec:
   source:
     repoURL: https://fluent.github.io/helm-charts
     chart: fluent-bit
-    targetRevision: 0.57.9
+    targetRevision: 0.58.1
     helm:
       values: |
         config:
