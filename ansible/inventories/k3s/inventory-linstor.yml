@@ -1,0 +1,14 @@
+---
+# Review L-1: pin the LINSTOR node name/IP per host instead of relying on
+# ansible_hostname / ansible_default_ipv4 facts. Changing the IP of a
+# registered LINSTOR node requires `linstor node modify`, so registering a
+# wrong address on the first run is expensive to undo. The role defaults
+# (ansible_hostname / ansible_default_ipv4.address) remain as fallbacks.
+linstor_nodes:
+  hosts:
+    k3s-linstor.k8s.cloud-milky.solufit.net:
+      linstor_node_name: "k3s-linstor"
+      linstor_node_ip: "10.2.0.9"
+  vars:
+    ansible_port: 22
+    ansible_user: ubuntu

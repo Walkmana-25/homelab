@@ -1,0 +1,6 @@
+---
+- name: Restart linstor satellite
+  ansible.builtin.systemd:
+    name: linstor-satellite
+    state: restarted
+  become: true

@@ -1,0 +1,9 @@
+---
+linstor_ppa_repo: "ppa:linbit/linbit-drbd9-stack"
+linstor_ppa_codename: "noble"
+linstor_block_device: "/dev/sdb"
+linstor_vg: "linstor_thinpool"
+linstor_thinpool_lv: "thinpool"
+linstor_storage_pool_name: "thinpool"
+linstor_node_name: "{{ ansible_hostname }}"
+linstor_node_ip: "{{ ansible_default_ipv4.address }}"

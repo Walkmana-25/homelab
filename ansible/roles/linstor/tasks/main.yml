@@ -1,0 +1,241 @@
+---
+# LINSTOR (controller + satellite combined node) install and LVM thin pool setup
+#
+# NOTE (review M-2 / H-1): the exact error messages and the JSON structure of
+# `linstor --machine-readable` output have NOT been verified against a real
+# linstor-client yet. Verify them during the first deployment and adjust the
+# failed_when/until conditions below if the actual output differs.
+
+- name: Check if block device exists
+  ansible.builtin.stat:
+    path: "{{ linstor_block_device }}"
+  register: linstor_block_device_stat
+  failed_when: not linstor_block_device_stat.stat.exists
+
+# Review L-4: use argv (list form) consistently instead of mixing cmd/argv.
+- name: Check if block device already has a filesystem
+  ansible.builtin.command:
+    argv: [blkid, -o, value, -s, TYPE, "{{ linstor_block_device }}"]
+  register: linstor_block_device_fs
+  changed_when: false
+  failed_when: false
+
+# Review M-1: `blkid -s TYPE` does not report a disk-wide partition table,
+# so a GPT/MBR layout would slip past the filesystem guard below and be
+# destroyed by pvcreate. Check PTTYPE separately.
+- name: Check if block device has a partition table
+  ansible.builtin.command:
+    argv: [blkid, -o, value, -s, PTTYPE, "{{ linstor_block_device }}"]
+  register: linstor_block_device_pttype
+  changed_when: false
+  failed_when: false
+
+- name: Check if block device is already an LVM physical volume
+  ansible.builtin.command:
+    argv: [pvs, --noheadings, -o, vg_name, "{{ linstor_block_device }}"]
+  register: linstor_block_device_pv
+  changed_when: false
+  failed_when: false
+
+- name: Fail if block device already has a filesystem
+  ansible.builtin.fail:
+    msg: >-
+      {{ linstor_block_device }} already contains a filesystem
+      ({{ linstor_block_device_fs.stdout }}). Refusing to overwrite existing data.
+  when: linstor_block_device_fs.stdout | length > 0 and linstor_block_device_fs.stdout != 'LVM2_member'
+
+- name: Fail if block device has a partition table
+  ansible.builtin.fail:
+    msg: >-
+      {{ linstor_block_device }} has a partition table
+      ({{ linstor_block_device_pttype.stdout }}). Refusing to overwrite existing data.
+  when: linstor_block_device_pttype.stdout | length > 0
+
+- name: Fail if block device belongs to a foreign LVM volume group
+  ansible.builtin.fail:
+    msg: >-
+      {{ linstor_block_device }} is already an LVM physical volume in volume group
+      '{{ linstor_block_device_pv.stdout | trim }}'. Refusing to overwrite existing data.
+  when:
+    - linstor_block_device_pv.rc == 0
+    - linstor_block_device_pv.stdout | trim != linstor_vg
+
+- name: Add LINBIT PPA for LINSTOR packages
+  ansible.builtin.apt_repository:
+    repo: "{{ linstor_ppa_repo }}"
+    codename: "{{ linstor_ppa_codename }}"
+    state: present
+
+- name: Install LINSTOR packages
+  ansible.builtin.apt:
+    name:
+      - lvm2
+      - linstor-controller
+      - linstor-satellite
+      - linstor-client
+    state: present
+    update_cache: true
+
+# Review C-1: never modify /etc/lvm/lvm.conf itself. community.general.ini_file
+# appends an INI-style "[devices]" header to the brace-syntax file, which LVM's
+# parser rejects (breaking lvm/pvs/vgs and the lvg/lvol tasks below). LVM >=
+# 2.02.98 auto-loads /etc/lvm/lvm.conf.d/*.conf and merges the devices section,
+# so drop a dedicated file there instead.
+- name: Ensure LVM conf.d directory exists
+  ansible.builtin.file:
+    path: /etc/lvm/lvm.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Exclude DRBD and LINSTOR devices from LVM scans
+  ansible.builtin.copy:
+    dest: /etc/lvm/lvm.conf.d/90-linstor.conf
+    content: |
+      # Managed by Ansible (role: linstor). LVM >= 2.02.98 auto-loads conf.d/*.conf
+      devices {
+          global_filter = [ "r|^/dev/drbd|", "r|^/dev/mapper/[lL]instor|" ]
+      }
+    mode: "0644"
+  notify: Restart linstor satellite
+
+# Note: community.general 8.x lvol no longer creates volume groups (its argspec
+# requires lv or thinpool), so use the dedicated lvg module for the VG.
+- name: Create volume group for LINSTOR
+  community.general.lvg:
+    vg: "{{ linstor_vg }}"
+    pvs:
+      - "{{ linstor_block_device }}"
+    state: present
+
+# Note: community.general 8.x lvol expects `thinpool` to be the pool name (str),
+# not a boolean. Passing no `lv` creates the thin pool itself.
+# shrink: false keeps re-runs idempotent (100%FREE resolves to ~0 once created).
+- name: Create thin pool logical volume
+  community.general.lvol:
+    vg: "{{ linstor_vg }}"
+    thinpool: "{{ linstor_thinpool_lv }}"
+    size: 100%FREE
+    shrink: false
+    state: present
+
+- name: Enable and start LINSTOR services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - linstor-satellite
+    - linstor-controller
+
+- name: Wait for LINSTOR controller REST API
+  ansible.builtin.wait_for:
+    port: 3370
+    timeout: 120
+
+# Review M-2: list first and create only when absent, so re-runs do not depend
+# on the (unverified) "already exists" error text of the linstor CLI. The
+# substring check matches the node name in the table output.
+- name: Check if node is already registered
+  ansible.builtin.command:
+    argv: [linstor, node, list]
+  register: linstor_node_list_check
+  changed_when: false
+
+- name: Register node as combined controller and satellite
+  ansible.builtin.command:
+    argv: [linstor, node, create, "{{ linstor_node_name }}", "{{ linstor_node_ip }}", --node-type, combined]
+  register: linstor_node_create
+  changed_when: linstor_node_create.rc == 0
+  when: linstor_node_name not in linstor_node_list_check.stdout
+
+# Review H-1: the plain table output of `linstor node list` always contains
+# the column header "Online", so the previous substring check succeeded
+# immediately regardless of the actual node state. Parse the
+# --machine-readable JSON instead.
+# NOTE: the actual JSON structure is [[{name, connection_status, ...}]]
+# (array of arrays of node objects). The field is `connection_status` with
+# value "ONLINE" (all caps). Verified against linstor 1.35.0~rc.1.
+- name: Wait for node to report Online
+  ansible.builtin.command:
+    argv: [linstor, --machine-readable, node, list]
+  register: linstor_node_online
+  until: >-
+    linstor_node_online.rc == 0
+    and linstor_node_online.stdout[:1] == '['
+    and (
+      (linstor_node_online.stdout | from_json)[0]
+      | selectattr('name', 'equalto', linstor_node_name)
+      | map(attribute='connection_status')
+      | list
+    ) == ['ONLINE']
+  retries: 24
+  delay: 5
+  changed_when: false
+
+# Review M-2: list first and create only when absent (same rationale as the
+# node registration above).
+- name: Check if storage pool is already registered
+  ansible.builtin.command:
+    argv: [linstor, storage-pool, list]
+  register: linstor_storage_pool_check
+  changed_when: false
+
+# Review H-1/M-2: the satellite may report Online before it announces the
+# LVMTHIN feature, in which case `storage-pool create lvmthin` fails with a
+# "not supported" error. Retry to cover that race.
+# failed_when is required IN ADDITION to until: in ansible-core 2.16 the until
+# conditional only decides whether to keep retrying; it never clears the
+# module-level failure flag set by rc != 0 (verified against
+# ansible/executor/task_executor.py and by behavior tests). Without
+# failed_when, an "already exists" rc=1 result would fail the task even though
+# until is satisfied. With both: rc=0 succeeds, "already exists" counts as
+# ok/unchanged, and a persistent failure exhausts the retries and fails.
+# NOTE: the 'already exists' wording is unverified; check the real CLI output
+# during the first deployment.
+- name: Register LVM thin storage pool
+  ansible.builtin.command:
+    argv:
+      - linstor
+      - storage-pool
+      - create
+      - lvmthin
+      - "{{ linstor_node_name }}"
+      - "{{ linstor_storage_pool_name }}"
+      - "{{ linstor_vg }}/{{ linstor_thinpool_lv }}"
+  register: linstor_storage_pool_create
+  changed_when: linstor_storage_pool_create.rc == 0
+  failed_when: >-
+    linstor_storage_pool_create.rc != 0
+    and 'already exists' not in (linstor_storage_pool_create.stdout | default('')) ~ (linstor_storage_pool_create.stderr | default(''))
+  retries: 6
+  delay: 5
+  until: >-
+    linstor_storage_pool_create.rc == 0
+    or 'already exists' in (linstor_storage_pool_create.stdout | default('')) ~ (linstor_storage_pool_create.stderr | default(''))
+  when: linstor_storage_pool_name not in linstor_storage_pool_check.stdout
+
+- name: Collect LINSTOR node list
+  ansible.builtin.command:
+    argv:
+      - linstor
+      - node
+      - list
+  register: linstor_nodes_verify
+  changed_when: false
+
+- name: Collect LINSTOR storage pool list
+  ansible.builtin.command:
+    argv:
+      - linstor
+      - storage-pool
+      - list
+  register: linstor_storage_pools_verify
+  changed_when: false
+
+- name: Show LINSTOR cluster state
+  ansible.builtin.debug:
+    msg:
+      - "=== linstor node list ==="
+      - "{{ linstor_nodes_verify.stdout }}"
+      - "=== linstor storage-pool list ==="
+      - "{{ linstor_storage_pools_verify.stdout }}"
