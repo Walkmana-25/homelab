@@ -19,7 +19,7 @@ spec:
   patches:
     - target:
         kind: DaemonSet
-        name: linstor-satellite
+        name: linstor-satellite.*
       patch: |
         apiVersion: apps/v1
         kind: DaemonSet
