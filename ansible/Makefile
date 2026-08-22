@@ -1,4 +1,4 @@
-.PHONY: ping deploy-staging deploy-production inventory-list ping-nfs deploy-nfs restart-nfs install-requirements ping-k3s install-k3s upgrade-k3s reboot-k3s deploy-argocd copy-kubeconfig check lint install-lint deploy-longhorn deploy-nfs-client ping-router deploy-router ping-node-exporter deploy-node-exporter restart-node-exporter ping-fluent-bit deploy-fluent-bit restart-fluent-bit configure-registry ping-linstor deploy-linstor update-linstor restart-linstor ping-piraeus-prereq deploy-piraeus-prereq
+.PHONY: ping deploy-staging deploy-production inventory-list ping-nfs deploy-nfs restart-nfs install-requirements ping-k3s install-k3s upgrade-k3s reboot-k3s deploy-argocd copy-kubeconfig check lint install-lint deploy-longhorn deploy-nfs-client ping-router deploy-router ping-node-exporter deploy-node-exporter restart-node-exporter ping-fluent-bit deploy-fluent-bit restart-fluent-bit configure-registry ping-linstor deploy-linstor update-linstor restart-linstor ping-piraeus-prereq deploy-piraeus-prereq common
 
 install-lint:
 	pip install --break-system-packages -r requirements.txt
@@ -49,7 +49,11 @@ restart-nfs:
 ping-k3s:
 	ansible -vv k3s_cluster -i inventories/k3s/inventory.yml -m ping
 
+common:
+	ansible-playbook -vv -i inventories/k3s/inventory.yml playbooks/common.yml
+
 install-k3s:
+	ansible-playbook -vv -i inventories/k3s/inventory.yml playbooks/common.yml
 	ansible-playbook -vv -i inventories/k3s/inventory.yml playbooks/nfs-client.yml
 	ansible-playbook -vv -i inventories/k3s/inventory.yml playbooks/btrfs-longhorn.yml
 	ansible-playbook -vv k3s.orchestration.site -i inventories/k3s/inventory.yml

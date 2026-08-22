@@ -1,0 +1,7 @@
+---
+- name: Apply common node configuration to all hosts
+  hosts: all
+  gather_facts: false
+  become: true
+  roles:
+    - role: common

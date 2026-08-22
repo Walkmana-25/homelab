@@ -1,0 +1,31 @@
+---
+# Common node configuration shared by every cluster host.
+#
+# multipathd claims device-mapper ownership of shared block devices. On the
+# k3s nodes it grabbed the Longhorn iSCSI LUNs before longhorn-manager could
+# mount them, breaking replica disk mounts. The daemon was disabled manually
+# on all four nodes (3x k3s + k3s-linstor) after the incident; the tasks
+# below keep that state idempotent so a re-provision or package update cannot
+# silently re-enable it.
+#
+# become is applied at the playbook level (playbooks/common.yml), matching
+# the linstor / piraeus_prereq role pattern. No handlers are needed: the
+# systemd module applies stop/disable/mask immediately.
+
+# The socket unit must be handled first and must be masked (symlink to
+# /dev/null) in addition to stopped+disabled: Ubuntu ships multipathd.socket,
+# so with the socket still active the daemon would be re-spawned via socket
+# activation even after the service unit itself is stopped and disabled.
+- name: Stop, disable and mask multipathd.socket
+  ansible.builtin.systemd:
+    name: multipathd.socket
+    state: stopped
+    enabled: false
+    masked: true
+
+- name: Stop, disable and mask multipathd.service
+  ansible.builtin.systemd:
+    name: multipathd.service
+    state: stopped
+    enabled: false
+    masked: true
