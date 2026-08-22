@@ -179,6 +179,8 @@ spec:
           persistence:
             enabled: true
             size: 1Gi
+            # move search-index PVC from default SC to LINSTOR ssd
+            storageClass: ssd
           auth:
             existingMasterKeySecret: librechat-credentials-env
           resources:

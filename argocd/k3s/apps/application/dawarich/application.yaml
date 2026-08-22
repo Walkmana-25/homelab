@@ -85,6 +85,11 @@ spec:
           redis:
             config:
               min-replicas-to-write: 0
+          # redis-ha subchart (aliased as "redis") persistent volume:
+          # move cache PVC from default SC to LINSTOR ssd
+          persistentVolume:
+            enabled: true
+            storageClass: ssd
 
         # PostgreSQL (CloudNativePG - deployed via dawarich-postgres in the same namespace)
         postgresql:
