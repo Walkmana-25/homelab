@@ -13,7 +13,7 @@ LINSTOR の対象バージョンは `ansible/roles/linstor/defaults/main.yml` �
 `linstor-common`, `linstor-controller`, `linstor-satellite` の 3 パッケージは `apt-mark hold` により固定されます。これにより、通常の `apt upgrade` や `unattended-upgrades` による予期しない自動更新を防ぎます。
 
 ### 明示的更新操作
-アップデートは `ansible/` ディレクトリ配下で dedicated コマンド `make update-linstor` を明示的に実行した場合のみ行われます。既存の `make deploy-linstor` および通常の再実行では、すでに指定バージョンが導入されている場合に不要な変更を行わない冪等性が維持されます。
+アップデートは `ansible/` ディレクトリ配下で dedicated コマンド `make update-linstor` を明示的に実行して行います。既存の `make deploy-linstor` および通常の再実行では、すでに指定バージョンが導入されている場合に不要な変更を行わない冪等性が維持されます。
 
 ---
 
