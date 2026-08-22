@@ -22,6 +22,12 @@ linstor_deb_sources:
 # Optional fallback URLs (e.g. Launchpad) downloaded into the cache when the
 # local sources do not provide all three debs. Empty by default.
 linstor_deb_urls: []
+# Optional dictionary of SHA256 checksums for pinned .deb packages.
+# Example:
+#   linstor-common: "1234567890abcdef..."
+#   linstor-controller: "1234567890abcdef..."
+#   linstor-satellite: "1234567890abcdef..."
+linstor_deb_checksums: {}
 # apt-mark hold the pinned packages so apt upgrade / unattended-upgrades
 # cannot silently move the cluster off the pinned version.
 linstor_hold_packages: true

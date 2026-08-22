@@ -1,3 +1,5 @@
 secret.yaml
 secrets.yaml
 .opencode/
+.ansible/
+*.log
