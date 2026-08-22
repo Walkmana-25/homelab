@@ -34,7 +34,7 @@ spec:
         # vmsingle PVC: apply nfs storageClass on (re)creation (longhorn -> nfs migration)
         vmsingle:
           spec:
-            retentionPeriod: 6m    # 6 months (chart key -> -retentionPeriod=6)
+            retentionPeriod: 180d    # 6 months (chart key -> -retentionPeriod=6)
             storage:
               storageClassName: nfs
               resources:
