@@ -50,9 +50,11 @@ Each subdirectory under `apps/` is a kustomize overlay.
 
 All run from `ansible/`. Default inventory is staging (`ansible.cfg`).
 
+`common` (also the first step of `make install-k3s`, runnable standalone as `make common`) disables and masks multipathd on all nodes — required before k3s/storage provisioning.
+
 | Command | What it does |
 |---------|-------------|
-| `make install-k3s` | Multi-step: nfs-client → btrfs-longhorn → k3s install → kubeconfig → fetch-kubeconfig → argocd. **Order matters — do not reorder.** |
+| `make install-k3s` | Multi-step: common (disable multipathd) → nfs-client → btrfs-longhorn → k3s install → kubeconfig → fetch-kubeconfig → argocd. **Order matters — do not reorder.** |
 | `make deploy-nfs` | NFS server setup via `inventories/k3s/inventory-nfs.yml` |
 | `make deploy-staging` | Run `site.yml` against staging inventory |
 | `make deploy-production` | Run `site.yml` against production inventory |

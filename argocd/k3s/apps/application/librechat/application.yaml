@@ -21,6 +21,10 @@ spec:
     targetRevision: 2.0.8
     helm:
       values: |
+        # Stopped 2026-08-22: data-loss incident during storage migration
+        # (longhorn→ssd; MongoDB DB + images PVC could not be restored).
+        # User-approved. Restart by setting replicaCount back to 1 — users
+        # must re-register. See .opencode/phase4c-librechat-final.md
         replicaCount: 0
 
         image:
@@ -114,9 +118,10 @@ spec:
                   titleConvo: true
                   titleModel: 'current_model'
                   modelDisplayLabel: 'INIAD Claude'
-          # Images PVC (librechat-helm-librechat-images): the chart reads
-          # librechat.imageVolume.* — the top-level imageVolume block below
-          # is not referenced by the chart templates
+          # Images PVC (librechat-helm-librechat-images): the chart reads only
+          # librechat.imageVolume.* — a top-level imageVolume block is not
+          # referenced by the chart templates. Size is left at the chart
+          # default, which matches the existing PVC (9765625Ki).
           imageVolume:
             storageClassName: ssd
 
@@ -148,13 +153,6 @@ spec:
           type: ClusterIP
           port: 3080
           targetPort: 3080
-
-        # ── Image volume (user uploads) ────────────────────────
-        imageVolume:
-          enabled: true
-          size: 5Gi
-          accessModes:
-            - ReadWriteOnce
 
         # ── MongoDB (Bitnami subchart) ─────────────────────────
         # Bitnami moved images from docker.io/bitnami to docker.io/bitnamilegacy
