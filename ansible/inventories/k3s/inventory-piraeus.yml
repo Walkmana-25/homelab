@@ -1,0 +1,12 @@
+---
+# Prepare the three k3s cluster nodes to run Piraeus data-plane satellites
+# (Plan B: DRBD diskless clients against the external LINSTOR controller on
+# k3s-linstor). See roles/piraeus_prereq for what is configured.
+piraeus_nodes:
+  hosts:
+    k3s-controller-a.k8s.cloud-milky.solufit.net:
+    k3s-worker-a.k8s.cloud-milky.solufit.net:
+    k3s-worker-b.k8s.cloud-milky.solufit.net:
+  vars:
+    ansible_port: 22
+    ansible_user: ubuntu

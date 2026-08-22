@@ -1,0 +1,49 @@
+---
+# Prepare k3s nodes for Piraeus satellites (LINSTOR/Piraeus Plan B: the three
+# k3s nodes act as DRBD diskless clients; the LINSTOR controller and the
+# replicas live on the external k3s-linstor node deployed by the linstor role).
+#
+# become is applied at the playbook level (playbooks/piraeus-prereq.yml),
+# matching the linstor role pattern.
+
+# ansible.posix.sysctl writes the value to piraeus_prereq_sysctl_file
+# (persistence across reboots) and applies it immediately (reload: true).
+- name: Raise fs.inotify.max_user_instances for Piraeus satellites
+  ansible.posix.sysctl:
+    name: fs.inotify.max_user_instances
+    value: "{{ piraeus_prereq_inotify_max_user_instances }}"
+    sysctl_file: "{{ piraeus_prereq_sysctl_file }}"
+    reload: true
+    state: present
+
+# --- Remove legacy host-side DRBD left by the former linstor_drbd role -----
+# The v2 Piraeus satellite ships its own DRBD userland inside the container
+# image. A host-side drbd-dkms module (9.3.2) clashes with the in-container
+# DRBD (9.3.3) and crashes the satellite pod into CrashLoopBackOff, so both
+# the module autoload config and the package must go.
+
+- name: Check if legacy drbd modules-load config exists
+  ansible.builtin.stat:
+    path: /etc/modules-load.d/drbd.conf
+  register: piraeus_prereq_drbd_modules_load
+
+- name: Remove legacy drbd modules-load config
+  ansible.builtin.file:
+    path: /etc/modules-load.d/drbd.conf
+    state: absent
+  when: piraeus_prereq_drbd_modules_load.stat.exists
+
+- name: Check if legacy drbd-dkms package is installed
+  ansible.builtin.command:
+    argv: [dpkg-query, -W, drbd-dkms]
+  register: piraeus_prereq_drbd_dkms_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Remove legacy drbd-dkms package
+  ansible.builtin.apt:
+    name: drbd-dkms
+    state: absent
+    purge: true
+  when: piraeus_prereq_drbd_dkms_status.rc == 0

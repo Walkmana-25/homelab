@@ -1,0 +1,7 @@
+---
+# fs.inotify.max_user_instances: the Piraeus satellite pods, kubelet and the
+# CSI sidecar containers each consume inotify watch instances; the Ubuntu
+# default (128) starves them on nodes running many pods.
+piraeus_prereq_inotify_max_user_instances: 1024
+# Persistence file for the sysctl settings managed by this role.
+piraeus_prereq_sysctl_file: "/etc/sysctl.d/99-linstor.conf"

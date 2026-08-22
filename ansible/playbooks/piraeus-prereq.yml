@@ -1,0 +1,7 @@
+---
+- name: Prepare k3s nodes for Piraeus satellites
+  hosts: piraeus_nodes
+  gather_facts: true
+  become: true
+  roles:
+    - role: piraeus_prereq
