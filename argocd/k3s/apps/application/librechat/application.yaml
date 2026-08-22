@@ -18,7 +18,7 @@ spec:
   source:
     chart: librechat
     repoURL: ghcr.io/danny-avila/librechat-chart
-    targetRevision: 2.0.7
+    targetRevision: 2.0.8
     helm:
       values: |
         replicaCount: 1
