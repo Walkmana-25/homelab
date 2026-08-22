@@ -1,4 +1,4 @@
-.PHONY: ping deploy-staging deploy-production inventory-list ping-nfs deploy-nfs restart-nfs install-requirements ping-k3s install-k3s upgrade-k3s reboot-k3s deploy-argocd copy-kubeconfig check lint install-lint deploy-longhorn deploy-nfs-client ping-router deploy-router ping-node-exporter deploy-node-exporter restart-node-exporter ping-fluent-bit deploy-fluent-bit restart-fluent-bit configure-registry ping-linstor deploy-linstor restart-linstor
+.PHONY: ping deploy-staging deploy-production inventory-list ping-nfs deploy-nfs restart-nfs install-requirements ping-k3s install-k3s upgrade-k3s reboot-k3s deploy-argocd copy-kubeconfig check lint install-lint deploy-longhorn deploy-nfs-client ping-router deploy-router ping-node-exporter deploy-node-exporter restart-node-exporter ping-fluent-bit deploy-fluent-bit restart-fluent-bit configure-registry ping-linstor deploy-linstor restart-linstor ping-piraeus-prereq deploy-piraeus-prereq
 
 install-lint:
 	pip install --break-system-packages -r requirements.txt
@@ -19,6 +19,7 @@ check: lint
 	ansible-inventory -vv -i inventories/k3s/inventory-node-exporter.yml --list > /dev/null
 	ansible-inventory -vv -i inventories/k3s/inventory-fluent-bit.yml --list > /dev/null
 	ansible-inventory -vv -i inventories/k3s/inventory-linstor.yml --list > /dev/null
+	ansible-inventory -vv -i inventories/k3s/inventory-piraeus.yml --list > /dev/null
 	@echo "All checks passed!"
 
 install-requirements:
@@ -109,3 +110,9 @@ deploy-linstor:
 
 restart-linstor:
 	ansible -vv linstor_nodes -i inventories/k3s/inventory-linstor.yml -m ansible.builtin.systemd -a "name=linstor-satellite state=restarted" --become
+
+ping-piraeus-prereq:
+	ansible -vv piraeus_nodes -i inventories/k3s/inventory-piraeus.yml -m ping
+
+deploy-piraeus-prereq:
+	ansible-playbook -vv -i inventories/k3s/inventory-piraeus.yml playbooks/piraeus-prereq.yml

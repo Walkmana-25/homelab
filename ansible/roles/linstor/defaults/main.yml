@@ -7,3 +7,21 @@ linstor_thinpool_lv: "thinpool"
 linstor_storage_pool_name: "thinpool"
 linstor_node_name: "{{ ansible_hostname }}"
 linstor_node_ip: "{{ ansible_default_ipv4.address }}"
+
+# Exact linstor-controller version to pin. The linstor packages are only
+# touched when the installed version differs (see tasks/main.yml); installing
+# from the PPA would otherwise jump to the latest release.
+linstor_target_version: "1.34.2-1ppa1~noble1"
+# Cache directory (on the target node) holding the pinned .deb files.
+linstor_deb_cache_dir: "/var/cache/linstor-debs"
+# Directories on the target node that already contain the pinned debs
+# (e.g. /tmp/linstor-1342 with linstor-{common,controller,satellite} debs).
+# Searched in order; matching files are copied into linstor_deb_cache_dir.
+linstor_deb_sources:
+  - "/tmp/linstor-1342"
+# Optional fallback URLs (e.g. Launchpad) downloaded into the cache when the
+# local sources do not provide all three debs. Empty by default.
+linstor_deb_urls: []
+# apt-mark hold the pinned packages so apt upgrade / unattended-upgrades
+# cannot silently move the cluster off the pinned version.
+linstor_hold_packages: true
