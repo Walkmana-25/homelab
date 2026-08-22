@@ -1,0 +1,22 @@
+---
+# StorageClass backed by LINSTOR CSI (DRBD with diskless client fallback).
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ssd
+  labels:
+    app.kubernetes.io/name: piraeus
+    app.kubernetes.io/part-of: infrastructure
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+provisioner: linstor.csi.linbit.com
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  linstor.csi.linbit.com/storagePool: "thinpool"
+  linstor.csi.linbit.com/layerList: "drbd storage"
+  linstor.csi.linbit.com/placementCount: "1"
+  linstor.csi.linbit.com/disklessStoragePool: "DfltDisklessStorPool"
+  csi.storage.k8s.io/fstype: btrfs
+  linstor.csi.linbit.com/mountOpts: "compress=zstd"

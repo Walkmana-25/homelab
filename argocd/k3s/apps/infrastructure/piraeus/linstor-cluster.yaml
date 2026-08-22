@@ -1,0 +1,18 @@
+---
+# LINSTOR cluster connected to an external LINSTOR controller.
+# Requires the LinstorCluster CRD, installed by the piraeus Helm chart
+# (wave 1). This manifest is applied by the umbrella Application at a
+# later sync-wave so the CRD exists before the custom resource.
+apiVersion: piraeus.io/v1
+kind: LinstorCluster
+metadata:
+  name: linstorcluster
+  namespace: piraeus-datastore
+  labels:
+    app.kubernetes.io/name: piraeus
+    app.kubernetes.io/part-of: infrastructure
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  externalController:
+    url: http://10.2.0.9:3370

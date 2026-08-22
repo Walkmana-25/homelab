@@ -17,3 +17,4 @@ resources:
   - argocd-ingress
   - loki
   - fluent-bit
+  - piraeus
