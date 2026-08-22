@@ -16,3 +16,16 @@ metadata:
 spec:
   externalController:
     url: http://10.2.0.9:3370
+  patches:
+    - target:
+        kind: DaemonSet
+        name: linstor-satellite
+      patch: |
+        apiVersion: apps/v1
+        kind: DaemonSet
+        metadata:
+          name: linstor-satellite
+        spec:
+          template:
+            spec:
+              hostNetwork: true
