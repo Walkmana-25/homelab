@@ -45,7 +45,7 @@ spec:
           # NOTE: Migration from loki-stack requires fresh data.
           # Old PVC data is not compatible with the new chart's storage format.
           limits_config:
-            retention_period: 720h
+            retention_period: 4380h  # 6 months
             reject_old_samples: true
             reject_old_samples_max_age: 168h
             volume_enabled: true
