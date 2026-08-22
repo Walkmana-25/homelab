@@ -114,6 +114,11 @@ spec:
                   titleConvo: true
                   titleModel: 'current_model'
                   modelDisplayLabel: 'INIAD Claude'
+          # Images PVC (librechat-helm-librechat-images): the chart reads
+          # librechat.imageVolume.* — the top-level imageVolume block below
+          # is not referenced by the chart templates
+          imageVolume:
+            storageClassName: ssd
 
         # ── RAG API ────────────────────────────────────────────
         librechat-rag-api:
@@ -165,6 +170,8 @@ spec:
           persistence:
             enabled: true
             size: 5Gi
+            # move mongodb PVC from longhorn to LINSTOR ssd (applies on PVC recreation)
+            storageClass: ssd
           resources:
             requests:
               cpu: 100m

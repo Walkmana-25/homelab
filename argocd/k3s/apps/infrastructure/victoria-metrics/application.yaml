@@ -31,6 +31,11 @@ spec:
                     labels:
                       cluster: k3s
                       node_type: bare-metal
+        # vmsingle PVC: apply nfs storageClass on (re)creation (longhorn -> nfs migration)
+        vmsingle:
+          spec:
+            storage:
+              storageClassName: nfs
         grafana:
           enabled: false
         defaultDashboardsEnabled: true
