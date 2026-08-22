@@ -21,7 +21,7 @@ spec:
     targetRevision: 2.0.8
     helm:
       values: |
-        replicaCount: 1
+        replicaCount: 0
 
         image:
           registry: registry.librechat.ai
