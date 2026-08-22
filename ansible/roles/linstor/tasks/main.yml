@@ -3,35 +3,29 @@
 # Linstor packages are pinned to linstor_target_version via local .deb files
 # (see defaults/main.yml), held with apt-mark, and the DRBD kernel modules
 # required by LINSTOR are built and loaded on this node.
-#
-# NOTE (review M-2 / H-1): the exact error messages and the JSON structure of
-# `linstor --machine-readable` output have NOT been verified against a real
-# linstor-client yet. Verify them during the first deployment and adjust the
-# failed_when/until conditions below if the actual output differs.
 
 - name: Check if block device exists
   ansible.builtin.stat:
     path: "{{ linstor_block_device }}"
   register: linstor_block_device_stat
   failed_when: not linstor_block_device_stat.stat.exists
+  tags: [linstor, update]
 
-# Review L-4: use argv (list form) consistently instead of mixing cmd/argv.
 - name: Check if block device already has a filesystem
   ansible.builtin.command:
     argv: [blkid, -o, value, -s, TYPE, "{{ linstor_block_device }}"]
   register: linstor_block_device_fs
   changed_when: false
   failed_when: false
+  tags: [linstor, update]
 
-# Review M-1: `blkid -s TYPE` does not report a disk-wide partition table,
-# so a GPT/MBR layout would slip past the filesystem guard below and be
-# destroyed by pvcreate. Check PTTYPE separately.
 - name: Check if block device has a partition table
   ansible.builtin.command:
     argv: [blkid, -o, value, -s, PTTYPE, "{{ linstor_block_device }}"]
   register: linstor_block_device_pttype
   changed_when: false
   failed_when: false
+  tags: [linstor, update]
 
 - name: Check if block device is already an LVM physical volume
   ansible.builtin.command:
@@ -39,6 +33,7 @@
   register: linstor_block_device_pv
   changed_when: false
   failed_when: false
+  tags: [linstor, update]
 
 - name: Fail if block device already has a filesystem
   ansible.builtin.fail:
@@ -46,6 +41,7 @@
       {{ linstor_block_device }} already contains a filesystem
       ({{ linstor_block_device_fs.stdout }}). Refusing to overwrite existing data.
   when: linstor_block_device_fs.stdout | length > 0 and linstor_block_device_fs.stdout != 'LVM2_member'
+  tags: [linstor, update]
 
 - name: Fail if block device has a partition table
   ansible.builtin.fail:
@@ -53,6 +49,7 @@
       {{ linstor_block_device }} has a partition table
       ({{ linstor_block_device_pttype.stdout }}). Refusing to overwrite existing data.
   when: linstor_block_device_pttype.stdout | length > 0
+  tags: [linstor, update]
 
 - name: Fail if block device belongs to a foreign LVM volume group
   ansible.builtin.fail:
@@ -62,35 +59,86 @@
   when:
     - linstor_block_device_pv.rc == 0
     - linstor_block_device_pv.stdout | trim != linstor_vg
+  tags: [linstor, update]
 
 - name: Add LINBIT PPA for LINSTOR packages
   ansible.builtin.apt_repository:
     repo: "{{ linstor_ppa_repo }}"
     codename: "{{ linstor_ppa_codename }}"
     state: present
+  tags: [linstor, update]
 
-# --- Pinned LINSTOR package install ----------------------------------------
+# --- Pinned LINSTOR package check and update -------------------------------
 # The cluster runs a known-good LINSTOR version. Installing linstor-* from the
 # PPA would jump to the latest release, so the three linstor debs are pinned
-# and installed from a local cache instead. The pin tasks below only run when
-# the installed linstor-controller version differs from linstor_target_version.
+# and installed from a local cache instead.
 
-# Read-only query: keep it running in check mode so the version comparison in
-# every `when` below stays meaningful there.
-- name: Check installed linstor-controller version
+- name: Check installed LINSTOR package versions
   ansible.builtin.command:
-    argv: [dpkg-query, -W, '-f=${Version}', linstor-controller]
-  register: linstor_controller_version
+    argv: [dpkg-query, -W, '-f=${Package}=${Version}\n', linstor-common, linstor-controller, linstor-satellite]
+  register: linstor_installed_packages
   changed_when: false
   failed_when: false
   check_mode: false
+  tags: [linstor, update]
+
+- name: Determine if LINSTOR package update is required
+  ansible.builtin.set_fact:
+    linstor_needs_package_update: >-
+      {{
+        linstor_installed_packages.rc != 0
+        or ('linstor-common=' ~ linstor_target_version) not in (linstor_installed_packages.stdout_lines | default([]))
+        or ('linstor-controller=' ~ linstor_target_version) not in (linstor_installed_packages.stdout_lines | default([]))
+        or ('linstor-satellite=' ~ linstor_target_version) not in (linstor_installed_packages.stdout_lines | default([]))
+      }}
+  tags: [linstor, update]
+
+- name: Collect current LINSTOR node state before update
+  ansible.builtin.command:
+    argv: [linstor, node, list]
+  register: linstor_pre_update_nodes
+  changed_when: false
+  failed_when: false
+  when: linstor_needs_package_update
+  tags: [linstor, update]
+
+- name: Collect current LINSTOR storage pool state before update
+  ansible.builtin.command:
+    argv: [linstor, storage-pool, list]
+  register: linstor_pre_update_storage_pools
+  changed_when: false
+  failed_when: false
+  when: linstor_needs_package_update
+  tags: [linstor, update]
+
+- name: Collect current LINSTOR resource state before update
+  ansible.builtin.command:
+    argv: [linstor, resource, list]
+  register: linstor_pre_update_resources
+  changed_when: false
+  failed_when: false
+  when: linstor_needs_package_update
+  tags: [linstor, update]
+
+- name: Log pre-update LINSTOR state
+  ansible.builtin.debug:
+    msg:
+      - "=== Pre-update linstor node list ==="
+      - "{{ linstor_pre_update_nodes.stdout | default('N/A (initial install or service stopped)') }}"
+      - "=== Pre-update linstor storage-pool list ==="
+      - "{{ linstor_pre_update_storage_pools.stdout | default('N/A (initial install or service stopped)') }}"
+      - "=== Pre-update linstor resource list ==="
+      - "{{ linstor_pre_update_resources.stdout | default('N/A (initial install or service stopped)') }}"
+  when: linstor_needs_package_update
+  tags: [linstor, update]
 
 - name: Ensure LINSTOR deb cache directory exists
   ansible.builtin.file:
     path: "{{ linstor_deb_cache_dir }}"
     state: directory
     mode: "0755"
-  when: linstor_controller_version.stdout != linstor_target_version
+  when: linstor_needs_package_update
+  tags: [linstor, update]
 
 # ansible.builtin.find does not expand braces in patterns, so use one pattern
 # per package (patterns are ORed by the module).
@@ -103,11 +151,9 @@
     - linstor-controller
     - linstor-satellite
   register: linstor_source_debs
-  when: linstor_controller_version.stdout != linstor_target_version
+  when: linstor_needs_package_update
+  tags: [linstor, update]
 
-# The sources live on the target node (e.g. manually downloaded to
-# /tmp/linstor-1342), hence remote_src. The `default([])` guard keeps the
-# skipped register (version already matching) templatable on re-runs.
 - name: Copy pinned LINSTOR debs into the cache
   ansible.builtin.copy:
     src: "{{ item.files[0].path }}"
@@ -118,8 +164,9 @@
   loop_control:
     label: "{{ item.item }}"
   when:
-    - linstor_controller_version.stdout != linstor_target_version
+    - linstor_needs_package_update
     - item.files | length > 0
+  tags: [linstor, update]
 
 - name: Download missing pinned LINSTOR debs from fallback URLs
   ansible.builtin.get_url:
@@ -128,9 +175,10 @@
     mode: "0644"
   loop: "{{ linstor_deb_urls }}"
   when:
-    - linstor_controller_version.stdout != linstor_target_version
+    - linstor_needs_package_update
     - linstor_deb_urls | length > 0
     - linstor_source_debs.results | default([]) | selectattr('files', 'equalto', []) | list | length > 0
+  tags: [linstor, update]
 
 - name: Collect cached pinned LINSTOR debs per package
   ansible.builtin.find:
@@ -141,7 +189,19 @@
     - linstor-controller
     - linstor-satellite
   register: linstor_cached_debs
-  when: linstor_controller_version.stdout != linstor_target_version
+  when: linstor_needs_package_update
+  tags: [linstor, update]
+
+- name: Log source of LINSTOR debs
+  ansible.builtin.debug:
+    msg: "Package {{ item.item }} cached deb path: {{ item.files[0].path }}"
+  loop: "{{ linstor_cached_debs.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - linstor_needs_package_update
+    - item.files | length > 0
+  tags: [linstor, update]
 
 - name: Fail when the cached LINSTOR deb set is incomplete
   ansible.builtin.fail:
@@ -152,27 +212,83 @@
       of linstor_deb_sources ({{ linstor_deb_sources | join(', ') }}) or set
       linstor_deb_urls to downloadable URLs.
   when:
-    - linstor_controller_version.stdout != linstor_target_version
+    - linstor_needs_package_update
     - linstor_cached_debs.results | default([]) | selectattr('files', 'equalto', []) | list | length > 0
+  tags: [linstor, update]
 
-# The apt module splits its deb: argument on commas and installs the files in
-# a single dpkg run, so all three interdependent debs are unpacked together
-# and apt never pulls linstor-common from the PPA mid-set. allow_downgrade is
-# the module's documented equivalent of apt's --allow-downgrades (dpkg_options
-# entries are always prefixed with '--' by the module, so passing
-# '--allow-downgrades' there would produce an invalid dpkg flag).
+- name: Inspect package name and version inside cached .deb files
+  ansible.builtin.command:
+    argv: [dpkg-deb, -W, '--showformat=${Package}=${Version}', "{{ item.files[0].path }}"]
+  loop: "{{ linstor_cached_debs.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  register: linstor_deb_inspect
+  changed_when: false
+  when:
+    - linstor_needs_package_update
+    - item.files | length > 0
+  tags: [linstor, update]
+
+- name: Fail if cached deb package metadata or version is invalid
+  ansible.builtin.fail:
+    msg: >-
+      Deb package validation failed for {{ item.item.item }}.
+      Expected {{ item.item.item }}={{ linstor_target_version }}, but dpkg-deb reported: {{ item.stdout | default('N/A') }}.
+  loop: "{{ linstor_deb_inspect.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.item }}"
+  when:
+    - linstor_needs_package_update
+    - not item.skipped | default(false)
+    - item.stdout != (item.item.item ~ '=' ~ linstor_target_version)
+  tags: [linstor, update]
+
+- name: Calculate SHA256 checksums of cached debs
+  ansible.builtin.stat:
+    path: "{{ item.files[0].path }}"
+    checksum_algorithm: sha256
+  loop: "{{ linstor_cached_debs.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  register: linstor_deb_stats
+  when:
+    - linstor_needs_package_update
+    - item.files | length > 0
+    - linstor_deb_checksums | default({}) | length > 0
+  tags: [linstor, update]
+
+- name: Fail if SHA256 checksum mismatch detected
+  ansible.builtin.fail:
+    msg: >-
+      SHA256 checksum mismatch for {{ item.item.item }}.
+      Expected: {{ linstor_deb_checksums[item.item.item] }}, Actual: {{ item.stat.checksum }}.
+  loop: "{{ linstor_deb_stats.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.item }}"
+  when:
+    - linstor_needs_package_update
+    - not item.skipped | default(false)
+    - item.item.item in (linstor_deb_checksums | default({}))
+    - item.stat.checksum != linstor_deb_checksums[item.item.item]
+  tags: [linstor, update]
+
+- name: Unhold LINSTOR packages for update
+  ansible.builtin.command:
+    argv: [apt-mark, unhold, linstor-common, linstor-controller, linstor-satellite]
+  register: linstor_unhold_packages_result
+  changed_when: "'was not on hold' not in (linstor_unhold_packages_result.stdout | default(''))"
+  failed_when: false
+  when: linstor_needs_package_update
+  tags: [linstor, update]
+
 - name: Install pinned LINSTOR debs from the local cache
   ansible.builtin.apt:
     deb: "{{ linstor_cached_debs.results | default([]) | map(attribute='files') | map('first') | map(attribute='path') | join(',') }}"
     state: present
     allow_downgrade: true
-  when: linstor_controller_version.stdout != linstor_target_version
+  when: linstor_needs_package_update
+  tags: [linstor, update]
 
-# linstor-client and lvm2 are not part of the pinned deb set: the client tracks
-# the PPA (its linstor-common dependency is already satisfied by the pinned
-# version), and lvm2 backs the lvg/lvol tasks below. Installed after the
-# pinned debs so apt does not pull a newer linstor-common as a client
-# dependency.
 - name: Install LINSTOR client and LVM dependencies
   ansible.builtin.apt:
     name:
@@ -181,26 +297,22 @@
     state: present
     update_cache: true
     cache_valid_time: 3600
+  tags: [linstor, update]
 
-# apt-mark reports "<pkg> was already set on hold." for each package that was
-# already held, so treat that as unchanged.
 - name: Hold pinned LINSTOR packages
   ansible.builtin.command:
     argv: [apt-mark, hold, linstor-common, linstor-controller, linstor-satellite]
   register: linstor_hold_packages_result
   changed_when: "'was already' not in (linstor_hold_packages_result.stdout | default(''))"
   when: linstor_hold_packages | bool
+  tags: [linstor, update]
 
-# Review C-1: never modify /etc/lvm/lvm.conf itself. community.general.ini_file
-# appends an INI-style "[devices]" header to the brace-syntax file, which LVM's
-# parser rejects (breaking lvm/pvs/vgs and the lvg/lvol tasks below). LVM >=
-# 2.02.98 auto-loads /etc/lvm/lvm.conf.d/*.conf and merges the devices section,
-# so drop a dedicated file there instead.
 - name: Ensure LVM conf.d directory exists
   ansible.builtin.file:
     path: /etc/lvm/lvm.conf.d
     state: directory
     mode: "0755"
+  tags: [linstor, update]
 
 - name: Exclude DRBD and LINSTOR devices from LVM scans
   ansible.builtin.copy:
@@ -212,12 +324,9 @@
       }
     mode: "0644"
   notify: Restart linstor satellite
+  tags: [linstor, update]
 
 # --- DRBD kernel modules ----------------------------------------------------
-# Merged from the former linstor_drbd role: the LINBIT PPA added above also
-# publishes drbd-dkms, so no separate repository task is needed. linux-headers
-# must be installed explicitly: this node does not carry kernel headers by
-# default and the DKMS build requires them (plus gcc/make).
 - name: Install DRBD kernel module and DKMS build dependencies
   ansible.builtin.apt:
     name:
@@ -228,9 +337,8 @@
     state: present
     update_cache: true
     cache_valid_time: 3600
+  tags: [linstor, update]
 
-# Both modules are required: modprobe drbd does not pull in the tcp transport
-# module automatically.
 - name: Load drbd kernel modules
   community.general.modprobe:
     name: "{{ item }}"
@@ -238,6 +346,7 @@
   loop:
     - drbd
     - drbd_transport_tcp
+  tags: [linstor, update]
 
 - name: Persist drbd modules across reboots
   ansible.builtin.copy:
@@ -246,9 +355,8 @@
       drbd
       drbd_transport_tcp
     mode: "0644"
+  tags: [linstor, update]
 
-# modinfo resolves each module through /lib/modules/<kernel>; a non-zero rc
-# means the DKMS build did not produce a loadable module.
 - name: Verify drbd kernel modules are built
   ansible.builtin.command:
     argv: [modinfo, -n, "{{ item }}"]
@@ -258,19 +366,16 @@
   loop:
     - drbd
     - drbd_transport_tcp
+  tags: [linstor, update]
 
-# Note: community.general 8.x lvol no longer creates volume groups (its argspec
-# requires lv or thinpool), so use the dedicated lvg module for the VG.
 - name: Create volume group for LINSTOR
   community.general.lvg:
     vg: "{{ linstor_vg }}"
     pvs:
       - "{{ linstor_block_device }}"
     state: present
+  tags: [linstor, update]
 
-# Note: community.general 8.x lvol expects `thinpool` to be the pool name (str),
-# not a boolean. Passing no `lv` creates the thin pool itself.
-# shrink: false keeps re-runs idempotent (100%FREE resolves to ~0 once created).
 - name: Create thin pool logical volume
   community.general.lvol:
     vg: "{{ linstor_vg }}"
@@ -278,6 +383,7 @@
     size: 100%FREE
     shrink: false
     state: present
+  tags: [linstor, update]
 
 - name: Enable and start LINSTOR services
   ansible.builtin.systemd:
@@ -287,20 +393,20 @@
   loop:
     - linstor-satellite
     - linstor-controller
+  tags: [linstor, update]
 
 - name: Wait for LINSTOR controller REST API
   ansible.builtin.wait_for:
     port: 3370
     timeout: 120
+  tags: [linstor, update]
 
-# Review M-2: list first and create only when absent, so re-runs do not depend
-# on the (unverified) "already exists" error text of the linstor CLI. The
-# substring check matches the node name in the table output.
 - name: Check if node is already registered
   ansible.builtin.command:
     argv: [linstor, node, list]
   register: linstor_node_list_check
   changed_when: false
+  tags: [linstor, update]
 
 - name: Register node as combined controller and satellite
   ansible.builtin.command:
@@ -308,14 +414,8 @@
   register: linstor_node_create
   changed_when: linstor_node_create.rc == 0
   when: linstor_node_name not in linstor_node_list_check.stdout
+  tags: [linstor, update]
 
-# Review H-1: the plain table output of `linstor node list` always contains
-# the column header "Online", so the previous substring check succeeded
-# immediately regardless of the actual node state. Parse the
-# --machine-readable JSON instead.
-# NOTE: the actual JSON structure is [[{name, connection_status, ...}]]
-# (array of arrays of node objects). The field is `connection_status` with
-# value "ONLINE" (all caps). Verified against linstor 1.35.0~rc.1.
 - name: Wait for node to report Online
   ansible.builtin.command:
     argv: [linstor, --machine-readable, node, list]
@@ -332,27 +432,15 @@
   retries: 24
   delay: 5
   changed_when: false
+  tags: [linstor, update]
 
-# Review M-2: list first and create only when absent (same rationale as the
-# node registration above).
 - name: Check if storage pool is already registered
   ansible.builtin.command:
     argv: [linstor, storage-pool, list]
   register: linstor_storage_pool_check
   changed_when: false
+  tags: [linstor, update]
 
-# Review H-1/M-2: the satellite may report Online before it announces the
-# LVMTHIN feature, in which case `storage-pool create lvmthin` fails with a
-# "not supported" error. Retry to cover that race.
-# failed_when is required IN ADDITION to until: in ansible-core 2.16 the until
-# conditional only decides whether to keep retrying; it never clears the
-# module-level failure flag set by rc != 0 (verified against
-# ansible/executor/task_executor.py and by behavior tests). Without
-# failed_when, an "already exists" rc=1 result would fail the task even though
-# until is satisfied. With both: rc=0 succeeds, "already exists" counts as
-# ok/unchanged, and a persistent failure exhausts the retries and fails.
-# NOTE: the 'already exists' wording is unverified; check the real CLI output
-# during the first deployment.
 - name: Register LVM thin storage pool
   ansible.builtin.command:
     argv:
@@ -374,6 +462,7 @@
     linstor_storage_pool_create.rc == 0
     or 'already exists' in (linstor_storage_pool_create.stdout | default('')) ~ (linstor_storage_pool_create.stderr | default(''))
   when: linstor_storage_pool_name not in linstor_storage_pool_check.stdout
+  tags: [linstor, update]
 
 - name: Collect LINSTOR node list
   ansible.builtin.command:
@@ -383,6 +472,7 @@
       - list
   register: linstor_nodes_verify
   changed_when: false
+  tags: [linstor, update]
 
 - name: Collect LINSTOR storage pool list
   ansible.builtin.command:
@@ -392,6 +482,18 @@
       - list
   register: linstor_storage_pools_verify
   changed_when: false
+  tags: [linstor, update]
+
+- name: Collect LINSTOR resource list
+  ansible.builtin.command:
+    argv:
+      - linstor
+      - resource
+      - list
+  register: linstor_resources_verify
+  changed_when: false
+  failed_when: false
+  tags: [linstor, update]
 
 - name: Show LINSTOR cluster state
   ansible.builtin.debug:
@@ -400,3 +502,6 @@
       - "{{ linstor_nodes_verify.stdout }}"
       - "=== linstor storage-pool list ==="
       - "{{ linstor_storage_pools_verify.stdout }}"
+      - "=== linstor resource list ==="
+      - "{{ linstor_resources_verify.stdout | default('N/A') }}"
+  tags: [linstor, update]

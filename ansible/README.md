@@ -42,11 +42,27 @@ make install-requirements
    make install-k3s
    ```
 
+### LINSTOR Storage Node Setup and Update
+
+1. Deploy or re-assert initial LINSTOR installation:
+   ```bash
+   make deploy-linstor
+   ```
+2. Safely update LINSTOR packages (`linstor-common`, `linstor-controller`, `linstor-satellite`) to `linstor_target_version`:
+   ```bash
+   make update-linstor
+   ```
+   For detailed update, verification, and rollback procedures, see [`../docs/linstor-update.md`](../docs/linstor-update.md).
+
 ## Makefile Commands
 
 | Command | Description |
 |---------|-------------|
 | `make install-requirements` | Install required Ansible collections |
+| `make ping-linstor` | Ping LINSTOR storage node |
+| `make deploy-linstor` | Setup LINSTOR storage node |
+| `make update-linstor` | Update LINSTOR packages explicitly to target version |
+| `make restart-linstor` | Restart LINSTOR satellite service |
 | `make ping-nfs` | Ping NFS servers |
 | `make deploy-nfs` | Setup NFS server |
 | `make restart-nfs` | Restart NFS service |
