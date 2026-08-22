@@ -14,9 +14,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://piraeus.io/helm-charts/
-    chart: piraeus
-    targetRevision: 2.11.0
+    repoURL: https://github.com/piraeusdatastore/piraeus-operator.git
+    targetRevision: v2.11.0
+    path: charts/piraeus
     helm:
       values: |
         installCRDs: true
