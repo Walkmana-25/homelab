@@ -13,6 +13,7 @@ resources:
   # - longhorn
   - cloudflare-tunnel-ingress-controller
   - victoria-metrics
+  - technitium-sd
   - grafana
   - headlamp
   - harbor

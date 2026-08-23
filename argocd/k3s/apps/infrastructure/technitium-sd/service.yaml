@@ -1,0 +1,19 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: technitium-sd
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: technitium-sd
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: infrastructure
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: technitium-sd
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

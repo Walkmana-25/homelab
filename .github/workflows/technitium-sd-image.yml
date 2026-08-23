@@ -1,0 +1,60 @@
+name: Technitium SD Image
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'argocd/k3s/apps/infrastructure/technitium-sd/app/**'
+      - '.github/workflows/technitium-sd-image.yml'
+  pull_request:
+    paths:
+      - 'argocd/k3s/apps/infrastructure/technitium-sd/app/**'
+      - '.github/workflows/technitium-sd-image.yml'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or tag to checkout'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6.1.0
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/technitium-sd
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=main-
+
+      - name: Build and push
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: argocd/k3s/apps/infrastructure/technitium-sd/app
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

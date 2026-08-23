@@ -22,16 +22,13 @@ spec:
         vmagent:
           spec:
             scrapeInterval: 60s
+            # node_exporter on all Proxmox VMs registered in Technitium DNS,
+            # discovered via the technitium-sd HTTP SD bridge (same namespace).
+            # Labels (cluster/node_type/vm_name) come from the SD service.
             inlineScrapeConfig: |
-              - job_name: "node-exporter-external"
-                static_configs:
-                  - targets:
-                      - "k3s-nfs.k8s.cloud-milky.solufit.net:9100"
-                      - "k3s-router.k8s.cloud-milky.solufit.net:9100"
-                      - "k3s-linstor.k8s.cloud-milky.solufit.net:9100"
-                    labels:
-                      cluster: k3s
-                      node_type: bare-metal
+              - job_name: "node-exporter-vms"
+                http_sd_configs:
+                  - url: "http://technitium-sd.monitoring.svc.cluster.local:8080/sd"
         # vmsingle PVC: apply nfs storageClass on (re)creation (longhorn -> nfs migration)
         vmsingle:
           spec:
