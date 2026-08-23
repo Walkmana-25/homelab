@@ -28,6 +28,7 @@ spec:
                   - targets:
                       - "k3s-nfs.k8s.cloud-milky.solufit.net:9100"
                       - "k3s-router.k8s.cloud-milky.solufit.net:9100"
+                      - "k3s-linstor.k8s.cloud-milky.solufit.net:9100"
                     labels:
                       cluster: k3s
                       node_type: bare-metal

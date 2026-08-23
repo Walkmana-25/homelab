@@ -89,13 +89,13 @@ deploy-router:
 	ansible-playbook -vv -i inventories/k3s/inventory-router.yml playbooks/router.yml
 
 ping-node-exporter:
-	ansible -vv nfs_servers:k3s_router -i inventories/k3s/inventory-node-exporter.yml -m ping
+	ansible -vv nfs_servers:k3s_router:linstor_nodes -i inventories/k3s/inventory-node-exporter.yml -m ping
 
 deploy-node-exporter:
 	ansible-playbook -vv -i inventories/k3s/inventory-node-exporter.yml playbooks/node-exporter.yml
 
 restart-node-exporter:
-	ansible -vv nfs_servers:k3s_router -i inventories/k3s/inventory-node-exporter.yml -m ansible.builtin.systemd -a "name=node_exporter state=restarted" --become
+	ansible -vv nfs_servers:k3s_router:linstor_nodes -i inventories/k3s/inventory-node-exporter.yml -m ansible.builtin.systemd -a "name=node_exporter state=restarted" --become
 
 ping-fluent-bit:
 	ansible -vv nfs_servers:k3s_router -i inventories/k3s/inventory-fluent-bit.yml -m ping
