@@ -1,0 +1,585 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vm-nodes-status
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: infrastructure
+    app.kubernetes.io/name: grafana
+data:
+  vm-nodes-status.json: |
+    {
+      "annotations": {
+        "list": []
+      },
+      "description": "UP/DOWN status of node-exporter targets on Proxmox VMs (job: node-exporter-vms), discovered via technitium-sd. Status only.",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "noValue": "0"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 8,
+            "x": 0,
+            "y": 0
+          },
+          "id": 1,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "count(up{job=\"node-exporter-vms\"} == 1)",
+              "instant": true,
+              "range": false,
+              "refId": "A",
+              "legendFormat": "up nodes"
+            }
+          ],
+          "title": "UP Nodes",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "noValue": "0"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 8,
+            "x": 8,
+            "y": 0
+          },
+          "id": 2,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "count(up{job=\"node-exporter-vms\"} == 0)",
+              "instant": true,
+              "range": false,
+              "refId": "A",
+              "legendFormat": "down nodes"
+            }
+          ],
+          "title": "DOWN Nodes",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 8,
+            "x": 16,
+            "y": 0
+          },
+          "id": 3,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "count(up{job=\"node-exporter-vms\"})",
+              "instant": true,
+              "range": false,
+              "refId": "A",
+              "legendFormat": "total nodes"
+            }
+          ],
+          "title": "Total Nodes",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              },
+              "mappings": [
+                {
+                  "options": {
+                    "0": {
+                      "text": "DOWN",
+                      "color": "red"
+                    },
+                    "1": {
+                      "text": "UP",
+                      "color": "green"
+                    }
+                  },
+                  "type": "value"
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 4
+          },
+          "id": 4,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false,
+              "enablePagination": false
+            },
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": false,
+                "displayName": "vm_name"
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "up{job=\"node-exporter-vms\"}",
+              "instant": true,
+              "range": false,
+              "refId": "A",
+              "format": "table",
+              "legendFormat": "{{vm_name}}"
+            }
+          ],
+          "title": "Node Status by vm_name",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "cluster": true,
+                  "job": true
+                },
+                "includeByName": {},
+                "indexByName": {
+                  "vm_name": 0,
+                  "node_type": 1,
+                  "instance": 2,
+                  "Value": 3
+                },
+                "renameByName": {
+                  "Value": "Status"
+                }
+              }
+            }
+          ],
+          "type": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              },
+              "mappings": [
+                {
+                  "options": {
+                    "0": {
+                      "text": "DOWN",
+                      "color": "red"
+                    }
+                  },
+                  "type": "value"
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 0,
+            "y": 14
+          },
+          "id": 5,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false,
+              "enablePagination": false
+            },
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": false,
+                "displayName": "vm_name"
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "up{job=\"node-exporter-vms\"} == 0",
+              "instant": true,
+              "range": false,
+              "refId": "A",
+              "format": "table",
+              "legendFormat": "{{vm_name}}"
+            }
+          ],
+          "title": "DOWN Nodes",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "cluster": true,
+                  "job": true
+                },
+                "includeByName": {},
+                "indexByName": {
+                  "vm_name": 0,
+                  "node_type": 1,
+                  "instance": 2,
+                  "Value": 3
+                },
+                "renameByName": {
+                  "Value": "Status"
+                }
+              }
+            }
+          ],
+          "type": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              },
+              "mappings": [
+                {
+                  "options": {
+                    "1": {
+                      "text": "UP",
+                      "color": "green"
+                    }
+                  },
+                  "type": "value"
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 12,
+            "y": 14
+          },
+          "id": 6,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false,
+              "enablePagination": false
+            },
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": false,
+                "displayName": "vm_name"
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "up{job=\"node-exporter-vms\"} == 1",
+              "instant": true,
+              "range": false,
+              "refId": "A",
+              "format": "table",
+              "legendFormat": "{{vm_name}}"
+            }
+          ],
+          "title": "UP Nodes",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "cluster": true,
+                  "job": true
+                },
+                "includeByName": {},
+                "indexByName": {
+                  "vm_name": 0,
+                  "node_type": 1,
+                  "instance": 2,
+                  "Value": 3
+                },
+                "renameByName": {
+                  "Value": "Status"
+                }
+              }
+            }
+          ],
+          "type": "table"
+        }
+      ],
+      "refresh": "1m",
+      "schemaVersion": 39,
+      "tags": [
+        "victoria-metrics",
+        "node-exporter",
+        "status"
+      ],
+      "templating": {
+        "list": [
+          {
+            "current": {
+              "selected": false,
+              "text": "VictoriaMetrics",
+              "value": "VictoriaMetrics"
+            },
+            "hide": 0,
+            "includeAll": false,
+            "label": "Datasource",
+            "multi": false,
+            "name": "DS",
+            "options": [],
+            "query": "prometheus",
+            "queryValue": "",
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "type": "datasource"
+          }
+        ]
+      },
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "VM Nodes Status",
+      "uid": "vm-nodes-status",
+      "version": 1,
+      "weekStart": ""
+    }
