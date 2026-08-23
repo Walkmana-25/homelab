@@ -17,6 +17,7 @@ import os
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -79,15 +80,36 @@ def is_excluded(name: str) -> bool:
     return normalized in EXCLUDED_NAMES or short_name in EXCLUDED_NAMES
 
 
+def _sanitize_url(url: str) -> str:
+    """Return scheme://host/path without query string (avoids leaking tokens)."""
+    parsed = urllib.parse.urlparse(url)
+    return urllib.parse.urlunparse(parsed._replace(query="", fragment=""))
+
+
 def fetch_zone_records(zone: str) -> List[Dict[str, object]]:
-    """Return the raw record list for a zone; raises on HTTP/API failure."""
-    query = urllib.parse.urlencode({"domain": zone, "zone": zone, "listZone": "true"})
-    request = urllib.request.Request(
-        f"{TECHNITIUM_URL}/api/zones/records/get?{query}",
-        headers={"Authorization": f"Bearer {TECHNITIUM_TOKEN}"},
+    """Return the raw record list for a zone; raises on HTTP/API failure.
+
+    The API token is passed as a query parameter (``token=…``), which is the
+    backward-compatible authentication method supported by all Technitium
+    DNS Server versions.  The ``Authorization: Bearer`` header is *not* used
+    because some versions reject it with "Parameter 'token' missing".
+    """
+    query = urllib.parse.urlencode(
+        {"token": TECHNITIUM_TOKEN, "domain": zone, "zone": zone, "listZone": "true"}
     )
-    with urllib.request.urlopen(request, timeout=API_TIMEOUT_SECONDS) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+    url = f"{TECHNITIUM_URL}/api/zones/records/get?{query}"
+    request = urllib.request.Request(url)
+    try:
+        with urllib.request.urlopen(request, timeout=API_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        # Re-raise with a sanitized URL so the token never appears in logs.
+        raise urllib.error.HTTPError(
+            _sanitize_url(exc.url), exc.code, exc.msg, exc.hdrs, exc.fp,
+        ) from exc
+    except urllib.error.URLError:
+        # URLError has no .url attribute — just re-raise as-is (no leak risk).
+        raise
     if payload.get("status") != "ok":
         raise RuntimeError(f"API error status for zone {zone!r}: {payload.get('status')!r}")
     response_body = payload.get("response")

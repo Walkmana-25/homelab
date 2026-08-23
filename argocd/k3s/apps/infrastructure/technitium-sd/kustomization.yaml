@@ -5,3 +5,4 @@ resources:
   - application.yaml
   - deployment.yaml
   - service.yaml
+  - technitium-token-sealed-secret.yaml

@@ -63,13 +63,10 @@ kubectl create secret generic technitium-sd-token \
   > argocd/k3s/apps/infrastructure/technitium-sd/technitium-token-sealed-secret.yaml
 ```
 
-Then:
-
-1. Add `- technitium-token-sealed-secret.yaml` to the `resources:` list in
-   `kustomization.yaml` (the placeholder file in git is comment-only and NOT
-   referenced, so builds keep working).
-2. Commit and let ArgoCD sync. The sealed-secrets controller unseals it into
-   namespace `monitoring` and the Deployment rolls.
+The generated SealedSecret is registered in `kustomization.yaml`
+(`technitium-token-sealed-secret.yaml` is in the `resources:` list). Commit
+and let ArgoCD sync. The sealed-secrets controller unseals it into namespace
+`monitoring` and the Deployment rolls.
 
 Get `<API_TOKEN>` from the Technitium UI: **Administration → API Tokens**.
 
