@@ -85,6 +85,32 @@
         jump: ACCEPT
         comment: "Allow upstream to k8s (established)"
 
+    - name: Configure NAT masquerade for k8s to VM network
+      ansible.builtin.iptables:
+        table: nat
+        chain: POSTROUTING
+        source: "10.2.0.0/24"
+        out_interface: eth1
+        jump: MASQUERADE
+        comment: "NAT for k8s to VM network"
+
+    - name: Allow forwarding from k8s network to VM network
+      ansible.builtin.iptables:
+        chain: FORWARD
+        in_interface: eth2
+        out_interface: eth1
+        jump: ACCEPT
+        comment: "Allow k8s to VM network"
+
+    - name: Allow forwarding from VM network to k8s network (established)
+      ansible.builtin.iptables:
+        chain: FORWARD
+        in_interface: eth1
+        out_interface: eth2
+        ctstate: ESTABLISHED,RELATED
+        jump: ACCEPT
+        comment: "Allow VM network to k8s (established)"
+
     - name: Save iptables rules
       ansible.builtin.command: netfilter-persistent save
       changed_when: true
