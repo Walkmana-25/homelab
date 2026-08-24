@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - application.yaml
   - loki-nodeport.yaml
+  - loki-loadbalancer.yaml

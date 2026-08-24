@@ -3,6 +3,8 @@
     Log_Level     info
     Daemon        off
     Parsers_File  parsers.conf
+    storage.path  /var/lib/fluent-bit/buffer
+    storage.sync  normal
 
 [INPUT]
     Name              systemd
@@ -11,16 +13,12 @@
     Read_From_Tail    On
     Mem_Buf_Limit     5MB
     Strip_Underscores On
-
-[FILTER]
-    Name              modify
-    Match             host.*
-    Add               log_type syslog
-    Add               hostname {{ ansible_hostname }}
+    storage.type      filesystem
 
 [OUTPUT]
     Name              loki
     Match             *
     Host              {{ fluent_bit_loki_host }}
     Port              {{ fluent_bit_loki_port }}
-    labels            job=fluent-bit, log_type=$log_type, hostname=$hostname
+    labels            job=fluent-bit, log_type=syslog, hostname=$HOSTNAME
+    Retry_Limit       False
