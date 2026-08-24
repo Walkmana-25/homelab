@@ -1,0 +1,6 @@
+---
+- name: Deploy nginx reverse proxy for Loki on k3s-router
+  hosts: k3s_router
+  become: true
+  roles:
+    - role: loki_proxy

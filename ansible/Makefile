@@ -1,4 +1,4 @@
-.PHONY: ping deploy-staging deploy-production inventory-list ping-nfs deploy-nfs restart-nfs install-requirements ping-k3s install-k3s upgrade-k3s reboot-k3s deploy-argocd copy-kubeconfig check lint install-lint deploy-longhorn deploy-nfs-client ping-router deploy-router ping-node-exporter deploy-node-exporter restart-node-exporter ping-fluent-bit deploy-fluent-bit restart-fluent-bit configure-registry ping-linstor deploy-linstor update-linstor restart-linstor ping-piraeus-prereq deploy-piraeus-prereq common
+.PHONY: ping deploy-staging deploy-production inventory-list ping-nfs deploy-nfs restart-nfs install-requirements ping-k3s install-k3s upgrade-k3s reboot-k3s deploy-argocd copy-kubeconfig check lint install-lint deploy-longhorn deploy-nfs-client ping-router deploy-router ping-node-exporter deploy-node-exporter restart-node-exporter ping-fluent-bit deploy-fluent-bit restart-fluent-bit deploy-loki-proxy configure-registry ping-linstor deploy-linstor update-linstor restart-linstor ping-piraeus-prereq deploy-piraeus-prereq common
 
 install-lint:
 	pip install --break-system-packages -r requirements.txt
@@ -105,6 +105,9 @@ deploy-fluent-bit:
 
 restart-fluent-bit:
 	ansible -vv nfs_servers:k3s_router:linstor_nodes -i inventories/k3s/inventory-fluent-bit.yml -m ansible.builtin.systemd -a "name=fluent-bit state=restarted" --become
+
+deploy-loki-proxy:
+	ansible-playbook -vv -i inventories/k3s/inventory-router.yml playbooks/loki-proxy.yml
 
 ping-linstor:
 	ansible -vv linstor_nodes -i inventories/k3s/inventory-linstor.yml -m ping

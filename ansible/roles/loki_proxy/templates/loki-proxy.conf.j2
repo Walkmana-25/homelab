@@ -1,0 +1,26 @@
+upstream loki_lb {
+    server {{ loki_proxy_upstream_host }}:{{ loki_proxy_upstream_port }};
+    keepalive 16;
+}
+
+server {
+    listen {{ loki_proxy_listen_port }};
+    server_name _;
+
+    # router自身のjournaldはfluent-bitで収集されるため、
+    # アクセスログを出すとpush->log->pushの増幅ループになる。無効化必須。
+    access_log off;
+
+    client_max_body_size 16m;
+
+    location / {
+        proxy_pass http://loki_lb;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}

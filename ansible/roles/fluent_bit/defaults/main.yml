@@ -1,5 +1,5 @@
 ---
-fluent_bit_loki_host: "10.2.0.110"
+fluent_bit_loki_host: "k3s-router.k8s.cloud-milky.solufit.net"
 fluent_bit_loki_port: "3100"
 fluent_bit_config_path: "/etc/fluent-bit/fluent-bit.conf"
 fluent_bit_user: "fluent-bit"

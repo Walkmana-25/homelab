@@ -1,0 +1,43 @@
+---
+- name: Install nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+  become: true
+
+- name: Disable default nginx site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  become: true
+
+- name: Deploy Loki proxy configuration
+  ansible.builtin.template:
+    src: loki-proxy.conf.j2
+    dest: /etc/nginx/sites-available/loki-proxy
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Restart nginx
+
+- name: Enable Loki proxy site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/loki-proxy
+    dest: /etc/nginx/sites-enabled/loki-proxy
+    state: link
+  become: true
+
+- name: Validate nginx configuration
+  ansible.builtin.command:
+    cmd: nginx -t
+  changed_when: false
+  become: true
+
+- name: Enable and start nginx service
+  ansible.builtin.systemd:
+    name: nginx
+    state: started
+    enabled: true
+  become: true

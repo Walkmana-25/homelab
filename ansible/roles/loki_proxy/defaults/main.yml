@@ -1,0 +1,4 @@
+---
+loki_proxy_listen_port: "3100"
+loki_proxy_upstream_host: "10.2.0.110"
+loki_proxy_upstream_port: "3100"
