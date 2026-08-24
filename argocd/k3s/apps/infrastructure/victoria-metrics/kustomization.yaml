@@ -5,3 +5,4 @@ resources:
   - application.yaml
   - vm-nodes-dashboard.yaml
   - vm-nodes-overview-dashboard.yaml
+  - vm-logs-dashboard.yaml
