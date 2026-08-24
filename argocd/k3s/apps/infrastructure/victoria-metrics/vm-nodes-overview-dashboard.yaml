@@ -1,0 +1,2114 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vm-nodes-overview
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: infrastructure
+    app.kubernetes.io/name: grafana
+data:
+  vm-nodes-overview.json: |
+    {
+      "annotations": {
+        "list": []
+      },
+      "description": "All-nodes overview across node-exporter jobs: CPU, memory, root filesystem, load, network throughput, resource pressure (PSI) split per resource (CPU / IO / memory), plus a time-range summary table. Node labels use hostname (vm_name) when available, else instance. Defaults to node-exporter-vms (Proxmox VMs via technitium-sd); switch the Job variable to include the in-cluster node-exporter DaemonSet.",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "noValue": "0"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 0
+          },
+          "id": 1,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "count(up{job=~\"$job\"} == 1)",
+              "instant": true,
+              "range": false,
+              "refId": "A",
+              "legendFormat": "up nodes"
+            }
+          ],
+          "title": "UP Nodes",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "noValue": "0"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 0
+          },
+          "id": 2,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "count(up{job=~\"$job\"} == 0)",
+              "instant": true,
+              "range": false,
+              "refId": "A",
+              "legendFormat": "down nodes"
+            }
+          ],
+          "title": "DOWN Nodes",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "blue"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 0
+          },
+          "id": 3,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "count(up{job=~\"$job\"})",
+              "instant": true,
+              "range": false,
+              "refId": "A",
+              "legendFormat": "total nodes"
+            }
+          ],
+          "title": "Total Nodes",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 80
+                  },
+                  {
+                    "color": "red",
+                    "value": 90
+                  }
+                ]
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 0
+          },
+          "id": 4,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "avg(100 * (1 - rate(node_cpu_seconds_total{job=~\"$job\",mode=\"idle\"}[5m])))",
+              "instant": true,
+              "range": false,
+              "refId": "A",
+              "legendFormat": "avg cpu"
+            }
+          ],
+          "title": "Avg CPU Usage",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "line"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 80
+                  },
+                  {
+                    "color": "red",
+                    "value": 90
+                  }
+                ]
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 4
+          },
+          "id": 5,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "100 * (1 - avg by (host) (label_replace(label_replace(rate(node_cpu_seconds_total{job=~\"$job\",mode=\"idle\"}[5m]), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\")))",
+              "instant": false,
+              "range": true,
+              "refId": "A",
+              "legendFormat": "{{host}}"
+            }
+          ],
+          "title": "CPU Usage by Node (%)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "line"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 80
+                  },
+                  {
+                    "color": "red",
+                    "value": 90
+                  }
+                ]
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 12
+          },
+          "id": 6,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace(label_replace(100 * (1 - node_memory_MemAvailable_bytes{job=~\"$job\"} / node_memory_MemTotal_bytes{job=~\"$job\"}), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\")",
+              "instant": false,
+              "range": true,
+              "refId": "A",
+              "legendFormat": "{{host}}"
+            }
+          ],
+          "title": "Memory Usage by Node (%)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "line"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 80
+                  },
+                  {
+                    "color": "red",
+                    "value": 90
+                  }
+                ]
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 20
+          },
+          "id": 7,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace(label_replace(100 * (1 - node_filesystem_avail_bytes{job=~\"$job\",mountpoint=\"/\"} / node_filesystem_size_bytes{job=~\"$job\",mountpoint=\"/\"}), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\")",
+              "instant": false,
+              "range": true,
+              "refId": "A",
+              "legendFormat": "{{host}}"
+            }
+          ],
+          "title": "Root FS Usage (%)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 28
+          },
+          "id": 8,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace(label_replace(node_load1{job=~\"$job\"}, \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\")",
+              "instant": false,
+              "range": true,
+              "refId": "A",
+              "legendFormat": "{{host}}"
+            }
+          ],
+          "title": "Load1",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "line"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 10
+                  },
+                  {
+                    "color": "red",
+                    "value": 30
+                  }
+                ]
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 36
+          },
+          "id": 14,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "100 * avg by (host) (label_replace(label_replace(rate(node_pressure_cpu_waiting_seconds_total{job=~\"$job\"}[5m]), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))",
+              "instant": false,
+              "range": true,
+              "refId": "A",
+              "legendFormat": "{{host}}"
+            }
+          ],
+          "title": "CPU Pressure (PSI) by Node (%)",
+          "type": "timeseries",
+          "description": "Pressure Stall Information: fraction of time tasks were stalled on CPU, per node (host = vm_name when present, else instance)."
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "line"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 10
+                  },
+                  {
+                    "color": "red",
+                    "value": 30
+                  }
+                ]
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 44
+          },
+          "id": 15,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "100 * avg by (host) (label_replace(label_replace(rate(node_pressure_io_waiting_seconds_total{job=~\"$job\"}[5m]), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))",
+              "instant": false,
+              "range": true,
+              "refId": "A",
+              "legendFormat": "{{host}}"
+            }
+          ],
+          "title": "IO Pressure (PSI) by Node (%)",
+          "type": "timeseries",
+          "description": "Pressure Stall Information: fraction of time tasks were stalled on IO, per node (host = vm_name when present, else instance)."
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "line"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 10
+                  },
+                  {
+                    "color": "red",
+                    "value": 30
+                  }
+                ]
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 52
+          },
+          "id": 16,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "100 * avg by (host) (label_replace(label_replace(rate(node_pressure_memory_waiting_seconds_total{job=~\"$job\"}[5m]), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))",
+              "instant": false,
+              "range": true,
+              "refId": "A",
+              "legendFormat": "{{host}}"
+            }
+          ],
+          "title": "Memory Pressure (PSI) by Node (%)",
+          "type": "timeseries",
+          "description": "Pressure Stall Information: fraction of time tasks were stalled on memory, per node (host = vm_name when present, else instance)."
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "Bps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 60
+          },
+          "id": 9,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "sum by (host) (label_replace(label_replace(rate(node_network_receive_bytes_total{job=~\"$job\",device!~\"lo|veth.*|docker.*|br-.*\"}[5m]), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))",
+              "instant": false,
+              "range": true,
+              "refId": "A",
+              "legendFormat": "RX {{host}}"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "sum by (host) (label_replace(label_replace(rate(node_network_transmit_bytes_total{job=~\"$job\",device!~\"lo|veth.*|docker.*|br-.*\"}[5m]), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))",
+              "instant": false,
+              "range": true,
+              "refId": "B",
+              "legendFormat": "TX {{host}}"
+            }
+          ],
+          "title": "Network RX/TX",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "CPU % avg"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "CPU % max"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 80
+                        },
+                        {
+                          "color": "red",
+                          "value": 90
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background",
+                      "mode": "gradient"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Mem % avg"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Mem % max"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 80
+                        },
+                        {
+                          "color": "red",
+                          "value": 90
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background",
+                      "mode": "gradient"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Root FS % max"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 80
+                        },
+                        {
+                          "color": "red",
+                          "value": 90
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background",
+                      "mode": "gradient"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Load1 avg"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Load1 max"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "PSI CPU % avg"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 10
+                        },
+                        {
+                          "color": "red",
+                          "value": 30
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background",
+                      "mode": "gradient"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "PSI CPU % max"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 10
+                        },
+                        {
+                          "color": "red",
+                          "value": 30
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background",
+                      "mode": "gradient"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "PSI IO % avg"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 10
+                        },
+                        {
+                          "color": "red",
+                          "value": 30
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background",
+                      "mode": "gradient"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "PSI IO % max"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 10
+                        },
+                        {
+                          "color": "red",
+                          "value": 30
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background",
+                      "mode": "gradient"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Net RX avg (Bps)"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "Bps"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Net TX avg (Bps)"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "Bps"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 68
+          },
+          "id": 13,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "enablePagination": false,
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": false,
+                "displayName": "Host"
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace((avg by (host) (avg_over_time((label_replace(label_replace((100 * (1 - avg by (instance, vm_name) (rate(node_cpu_seconds_total{job=~\"$job\",mode=\"idle\"}[5m])))), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))[$__range:1m]))), \"__name__\", \"cpu_avg\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "refId": "A",
+              "legendFormat": "{{host}}"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace((avg by (host) (max_over_time((label_replace(label_replace((100 * (1 - avg by (instance, vm_name) (rate(node_cpu_seconds_total{job=~\"$job\",mode=\"idle\"}[5m])))), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))[$__range:1m]))), \"__name__\", \"cpu_max\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "refId": "B",
+              "legendFormat": "{{host}}"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace((avg by (host) (avg_over_time((label_replace(label_replace((100 * (1 - node_memory_MemAvailable_bytes{job=~\"$job\"} / node_memory_MemTotal_bytes{job=~\"$job\"})), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))[$__range:1m]))), \"__name__\", \"mem_avg\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "refId": "C",
+              "legendFormat": "{{host}}"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace((avg by (host) (max_over_time((label_replace(label_replace((100 * (1 - node_memory_MemAvailable_bytes{job=~\"$job\"} / node_memory_MemTotal_bytes{job=~\"$job\"})), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))[$__range:1m]))), \"__name__\", \"mem_max\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "refId": "D",
+              "legendFormat": "{{host}}"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace((avg by (host) (max_over_time((label_replace(label_replace((100 * (1 - node_filesystem_avail_bytes{job=~\"$job\",mountpoint=\"/\"} / node_filesystem_size_bytes{job=~\"$job\",mountpoint=\"/\"})), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))[$__range:1m]))), \"__name__\", \"rootfs_max\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "refId": "E",
+              "legendFormat": "{{host}}"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace((avg by (host) (avg_over_time((label_replace(label_replace((node_load1{job=~\"$job\"}), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))[$__range:1m]))), \"__name__\", \"load_avg\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "refId": "F",
+              "legendFormat": "{{host}}"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace((avg by (host) (max_over_time((label_replace(label_replace((node_load1{job=~\"$job\"}), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))[$__range:1m]))), \"__name__\", \"load_max\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "refId": "G",
+              "legendFormat": "{{host}}"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace((avg by (host) (avg_over_time((label_replace(label_replace((100 * rate(node_pressure_cpu_waiting_seconds_total{job=~\"$job\"}[5m])), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))[$__range:1m]))), \"__name__\", \"psi_cpu_avg\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "refId": "H",
+              "legendFormat": "{{host}}"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace((avg by (host) (max_over_time((label_replace(label_replace((100 * rate(node_pressure_cpu_waiting_seconds_total{job=~\"$job\"}[5m])), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))[$__range:1m]))), \"__name__\", \"psi_cpu_max\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "refId": "I",
+              "legendFormat": "{{host}}"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace((avg by (host) (avg_over_time((label_replace(label_replace((100 * rate(node_pressure_io_waiting_seconds_total{job=~\"$job\"}[5m])), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))[$__range:1m]))), \"__name__\", \"psi_io_avg\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "refId": "J",
+              "legendFormat": "{{host}}"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace((avg by (host) (max_over_time((label_replace(label_replace((100 * rate(node_pressure_io_waiting_seconds_total{job=~\"$job\"}[5m])), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))[$__range:1m]))), \"__name__\", \"psi_io_max\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "refId": "K",
+              "legendFormat": "{{host}}"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace((avg by (host) (avg_over_time((label_replace(label_replace((rate(node_network_receive_bytes_total{job=~\"$job\",device!~\"lo|veth.*|docker.*|br-.*\"}[5m])), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))[$__range:1m]))), \"__name__\", \"net_rx_avg\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "refId": "L",
+              "legendFormat": "{{host}}"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "label_replace((avg by (host) (avg_over_time((label_replace(label_replace((rate(node_network_transmit_bytes_total{job=~\"$job\",device!~\"lo|veth.*|docker.*|br-.*\"}[5m])), \"host\",\"$1\",\"instance\",\"(.+)\"), \"host\",\"$1\",\"vm_name\",\"(.+)\"))[$__range:1m]))), \"__name__\", \"net_tx_avg\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "refId": "M",
+              "legendFormat": "{{host}}"
+            }
+          ],
+          "title": "Summary (Time Range avg/max)",
+          "description": "Per-host aggregation over the selected time range: avg/max CPU and memory %, max root FS %, avg/max load1, avg/max CPU & IO pressure (PSI), and average network RX/TX. Instant subquery targets (expr[$__range:1m] with avg_over_time/max_over_time) -> labelsToFields(host) -> joinByField(host) -> organize.",
+          "transformations": [
+            {
+              "id": "labelsToFields",
+              "options": {
+                "mode": "columns",
+                "keepLabels": [
+                  "host"
+                ]
+              }
+            },
+            {
+              "id": "joinByField",
+              "options": {
+                "byField": "host",
+                "mode": "outer"
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "instance": true,
+                  "job": true,
+                  "cluster": true,
+                  "prometheus": true,
+                  "node_type": true,
+                  "__name__": true
+                },
+                "includeByName": {},
+                "indexByName": {
+                  "host": 0,
+                  "cpu_avg": 1,
+                  "cpu_max": 2,
+                  "mem_avg": 3,
+                  "mem_max": 4,
+                  "rootfs_max": 5,
+                  "load_avg": 6,
+                  "load_max": 7,
+                  "psi_cpu_avg": 8,
+                  "psi_cpu_max": 9,
+                  "psi_io_avg": 10,
+                  "psi_io_max": 11,
+                  "net_rx_avg": 12,
+                  "net_tx_avg": 13
+                },
+                "renameByName": {
+                  "host": "Host",
+                  "cpu_avg": "CPU % avg",
+                  "cpu_max": "CPU % max",
+                  "mem_avg": "Mem % avg",
+                  "mem_max": "Mem % max",
+                  "rootfs_max": "Root FS % max",
+                  "load_avg": "Load1 avg",
+                  "load_max": "Load1 max",
+                  "psi_cpu_avg": "PSI CPU % avg",
+                  "psi_cpu_max": "PSI CPU % max",
+                  "psi_io_avg": "PSI IO % avg",
+                  "psi_io_max": "PSI IO % max",
+                  "net_rx_avg": "Net RX avg (Bps)",
+                  "net_tx_avg": "Net TX avg (Bps)"
+                }
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^Value #A$",
+                "renamePattern": "CPU % avg"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^Value #B$",
+                "renamePattern": "CPU % max"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^Value #C$",
+                "renamePattern": "Mem % avg"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^Value #D$",
+                "renamePattern": "Mem % max"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^Value #E$",
+                "renamePattern": "Root FS % max"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^Value #F$",
+                "renamePattern": "Load1 avg"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^Value #G$",
+                "renamePattern": "Load1 max"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^Value #H$",
+                "renamePattern": "PSI CPU % avg"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^Value #I$",
+                "renamePattern": "PSI CPU % max"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^Value #J$",
+                "renamePattern": "PSI IO % avg"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^Value #K$",
+                "renamePattern": "PSI IO % max"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^Value #L$",
+                "renamePattern": "Net RX avg (Bps)"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^Value #M$",
+                "renamePattern": "Net TX avg (Bps)"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^cpu_avg$",
+                "renamePattern": "CPU % avg"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^cpu_max$",
+                "renamePattern": "CPU % max"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^mem_avg$",
+                "renamePattern": "Mem % avg"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^mem_max$",
+                "renamePattern": "Mem % max"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^rootfs_max$",
+                "renamePattern": "Root FS % max"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^load_avg$",
+                "renamePattern": "Load1 avg"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^load_max$",
+                "renamePattern": "Load1 max"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^psi_cpu_avg$",
+                "renamePattern": "PSI CPU % avg"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^psi_cpu_max$",
+                "renamePattern": "PSI CPU % max"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^psi_io_avg$",
+                "renamePattern": "PSI IO % avg"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^psi_io_max$",
+                "renamePattern": "PSI IO % max"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^net_rx_avg$",
+                "renamePattern": "Net RX avg (Bps)"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^net_tx_avg$",
+                "renamePattern": "Net TX avg (Bps)"
+              }
+            },
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^host$",
+                "renamePattern": "Host"
+              }
+            }
+          ],
+          "type": "table"
+        }
+      ],
+      "refresh": "1m",
+      "schemaVersion": 39,
+      "style": "dark",
+      "tags": [
+        "victoria-metrics",
+        "node-exporter",
+        "overview"
+      ],
+      "templating": {
+        "list": [
+          {
+            "current": {
+              "selected": false,
+              "text": "VictoriaMetrics",
+              "value": "VictoriaMetrics"
+            },
+            "hide": 0,
+            "includeAll": false,
+            "label": "Datasource",
+            "multi": false,
+            "name": "DS",
+            "options": [],
+            "query": "prometheus",
+            "queryValue": "",
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "type": "datasource"
+          },
+          {
+            "current": {
+              "selected": true,
+              "text": [
+                "node-exporter-vms"
+              ],
+              "value": [
+                "node-exporter-vms"
+              ]
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${DS}"
+            },
+            "definition": "label_values(up, job)",
+            "hide": 0,
+            "allValue": ".*",
+            "includeAll": true,
+            "label": "Job",
+            "multi": true,
+            "name": "job",
+            "options": [],
+            "query": {
+              "qryType": 1,
+              "query": "label_values(up, job)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "refresh": 1,
+            "regex": "node-exporter.*",
+            "skipUrlSync": false,
+            "sort": 1,
+            "type": "query"
+          },
+          {
+            "current": {
+              "selected": true,
+              "text": [
+                "All"
+              ],
+              "value": [
+                "$__all"
+              ]
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${DS}"
+            },
+            "definition": "label_values(up{job=~\"$job\"}, vm_name)",
+            "hide": 0,
+            "allValue": ".*",
+            "includeAll": true,
+            "label": "VM Name",
+            "multi": true,
+            "name": "vm_name",
+            "options": [],
+            "query": {
+              "qryType": 1,
+              "query": "label_values(up{job=~\"$job\"}, vm_name)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "refresh": 2,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 1,
+            "type": "query"
+          }
+        ]
+      },
+      "time": {
+        "from": "now-3h",
+        "to": "now"
+      },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "VM Nodes Overview",
+      "uid": "vm-nodes-overview",
+      "version": 4,
+      "weekStart": ""
+    }
