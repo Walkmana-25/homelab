@@ -13,7 +13,7 @@ data:
       "annotations": {
         "list": []
       },
-      "description": "journald logs from Proxmox VMs (k3s-nfs, k3s-router, k3s-linstor) shipped by Ansible-managed Fluent Bit agents to Loki. Filter by VM hostname; error counts and stream health at a glance.",
+      "description": "journald logs from Proxmox VMs (k3s-nfs, k3s-router, k3s-linstor) shipped by Ansible-managed Fluent Bit agents to Loki. Filter by VM hostname; error counts and stream health at a glance. Filter by VM, systemd unit, and derived level; regex search across raw log lines.",
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 1,
@@ -76,7 +76,7 @@ data:
                 "uid": "${DS}"
               },
               "editorMode": "code",
-              "expr": "sum(count_over_time({job=\"fluent-bit\",log_type=\"syslog\",hostname=~\"$hostname\"}[1h]))",
+              "expr": "sum(count_over_time({job=\"fluent-bit\",log_type=\"syslog\",hostname=~\"$hostname\"} |~ \"(?i)$search\" [1h]))",
               "instant": true,
               "range": false,
               "refId": "A",
@@ -145,7 +145,7 @@ data:
                 "uid": "${DS}"
               },
               "editorMode": "code",
-              "expr": "sum(count_over_time({job=\"fluent-bit\",log_type=\"syslog\",hostname=~\"$hostname\"} | json | PRIORITY=~\"[0-3]\" [24h]))",
+              "expr": "sum(count_over_time({job=\"fluent-bit\",log_type=\"syslog\",hostname=~\"$hostname\"} | json priority=\"PRIORITY\" | priority=~\"[0-3]\" [24h]))",
               "instant": true,
               "range": false,
               "refId": "A",
@@ -391,14 +391,14 @@ data:
                 "uid": "${DS}"
               },
               "editorMode": "code",
-              "expr": "topk(10, sum by (service_name) (count_over_time({job=\"fluent-bit\",log_type=\"syslog\",hostname=~\"$hostname\"}[$__auto])))",
+              "expr": "topk(10, sum by (unit) (count_over_time({job=\"fluent-bit\",log_type=\"syslog\",hostname=~\"$hostname\"} | json unit=\"SYSTEMD_UNIT\" [$__auto])))",
               "queryType": "",
               "range": true,
               "refId": "A",
-              "legendFormat": "{{service_name}}"
+              "legendFormat": "{{unit}}"
             }
           ],
-          "title": "Log volume by service",
+          "title": "Log volume by unit",
           "type": "timeseries"
         },
         {
@@ -422,7 +422,16 @@ data:
             "wrapLogMessage": true,
             "showTime": true,
             "showLabels": false,
-            "enableInfiniteScrolling": true
+            "showCommonLabels": false,
+            "enableInfiniteScrolling": true,
+            "enableLogDetails": true,
+            "prettifyLogMessage": true,
+            "dedupStrategy": "none",
+            "showControls": true,
+            "syntaxHighlighting": true,
+            "showFieldSelector": true,
+            "fontSize": "default",
+            "detailsMode": "inline"
           },
           "targets": [
             {
@@ -431,12 +440,13 @@ data:
                 "uid": "${DS}"
               },
               "editorMode": "code",
-              "expr": "{job=\"fluent-bit\",log_type=\"syslog\",hostname=~\"$hostname\"}",
+              "expr": "{job=\"fluent-bit\",log_type=\"syslog\",hostname=~\"$hostname\"} |~ \"(?i)$search\" | json priority=\"PRIORITY\", unit=\"SYSTEMD_UNIT\", message=\"MESSAGE\" | label_format level=\"{{if eq .priority \\\"0\\\"}}emerg{{else if eq .priority \\\"1\\\"}}alert{{else if eq .priority \\\"2\\\"}}crit{{else if eq .priority \\\"3\\\"}}err{{else if eq .priority \\\"4\\\"}}warning{{else if eq .priority \\\"5\\\"}}notice{{else if eq .priority \\\"6\\\"}}info{{else}}unknown{{end}}\" | unit=~\"$unit\" | level=~\"$level\" | line_format \"[{{.unit}}] {{.message}}\"",
               "queryType": "range",
               "refId": "A"
             }
           ],
           "title": "VM logs",
+          "description": "Search: case-insensitive regex over the raw log line. Unit filter uses SYSTEMD_UNIT. Level is derived from journald PRIORITY.",
           "type": "logs"
         }
       ],
@@ -501,6 +511,81 @@ data:
             "skipUrlSync": false,
             "sort": 1,
             "type": "query"
+          },
+          {
+            "current": {
+              "selected": true,
+              "text": [
+                "All"
+              ],
+              "value": [
+                "$__all"
+              ]
+            },
+            "datasource": {
+              "type": "loki",
+              "uid": "${DS}"
+            },
+            "definition": "sum by (unit) (count_over_time({job=\"fluent-bit\",log_type=\"syslog\"} | json unit=\"SYSTEMD_UNIT\" [1h]))",
+            "includeAll": true,
+            "allValue": ".*",
+            "label": "Unit (systemd)",
+            "multi": true,
+            "name": "unit",
+            "options": [],
+            "query": "sum by (unit) (count_over_time({job=\"fluent-bit\",log_type=\"syslog\"} | json unit=\"SYSTEMD_UNIT\" [1h]))",
+            "refresh": 2,
+            "regex": "",
+            "sort": 1,
+            "type": "query"
+          },
+          {
+            "current": {
+              "selected": true,
+              "text": "All",
+              "value": "$__all"
+            },
+            "includeAll": true,
+            "allValue": ".*",
+            "label": "Level",
+            "multi": false,
+            "name": "level",
+            "options": [
+              {
+                "selected": true,
+                "text": "All",
+                "value": "$__all"
+              },
+              {
+                "selected": false,
+                "text": "error",
+                "value": "emerg|alert|crit|err"
+              },
+              {
+                "selected": false,
+                "text": "warning",
+                "value": "warning"
+              },
+              {
+                "selected": false,
+                "text": "info+",
+                "value": "info|notice|debug"
+              }
+            ],
+            "query": "All : .*, error : emerg|alert|crit|err, warning : warning, info+ : info|notice|debug",
+            "type": "custom"
+          },
+          {
+            "current": {
+              "selected": false,
+              "text": "",
+              "value": ""
+            },
+            "label": "Search (regex)",
+            "name": "search",
+            "options": [],
+            "query": "",
+            "type": "textbox"
           }
         ]
       },
