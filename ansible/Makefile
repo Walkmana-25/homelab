@@ -98,13 +98,13 @@ restart-node-exporter:
 	ansible -vv nfs_servers:k3s_router:linstor_nodes -i inventories/k3s/inventory-node-exporter.yml -m ansible.builtin.systemd -a "name=node_exporter state=restarted" --become
 
 ping-fluent-bit:
-	ansible -vv nfs_servers:k3s_router -i inventories/k3s/inventory-fluent-bit.yml -m ping
+	ansible -vv nfs_servers:k3s_router:linstor_nodes -i inventories/k3s/inventory-fluent-bit.yml -m ping
 
 deploy-fluent-bit:
 	ansible-playbook -vv -i inventories/k3s/inventory-fluent-bit.yml playbooks/fluent-bit.yml
 
 restart-fluent-bit:
-	ansible -vv nfs_servers:k3s_router -i inventories/k3s/inventory-fluent-bit.yml -m ansible.builtin.systemd -a "name=fluent-bit state=restarted" --become
+	ansible -vv nfs_servers:k3s_router:linstor_nodes -i inventories/k3s/inventory-fluent-bit.yml -m ansible.builtin.systemd -a "name=fluent-bit state=restarted" --become
 
 ping-linstor:
 	ansible -vv linstor_nodes -i inventories/k3s/inventory-linstor.yml -m ping

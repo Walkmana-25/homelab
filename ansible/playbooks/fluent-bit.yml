@@ -1,6 +1,6 @@
 ---
 - name: Install and configure Fluent Bit on external nodes
-  hosts: nfs_servers:k3s_router
+  hosts: nfs_servers:k3s_router:linstor_nodes
   become: true
   roles:
     - role: fluent_bit

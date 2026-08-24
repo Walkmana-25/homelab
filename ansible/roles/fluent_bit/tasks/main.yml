@@ -19,8 +19,13 @@
 - name: Download Fluent Bit GPG key
   ansible.builtin.get_url:
     url: https://packages.fluentbit.io/fluentbit.key
-    dest: /etc/apt/keyrings/fluentbit.gpg
+    dest: /tmp/fluentbit.asc
     mode: "0644"
+  become: true
+
+- name: Dearmor Fluent Bit GPG key
+  ansible.builtin.shell:
+    cmd: gpg --batch --yes --dearmor -o /etc/apt/keyrings/fluentbit.gpg < /tmp/fluentbit.asc
   become: true
 
 - name: Add Fluent Bit APT repository
