@@ -911,7 +911,7 @@ data:
               "id": "renameByRegex",
               "options": {
                 "regex": "Value.*",
-                "rename": "Logs 5m"
+                "renamePattern": "Logs 5m"
               }
             },
             {
