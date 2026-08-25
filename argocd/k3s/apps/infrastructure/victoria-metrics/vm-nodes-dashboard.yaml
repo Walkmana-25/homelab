@@ -908,8 +908,11 @@ data:
               "options": {}
             },
             {
-              "id": "concat",
-              "options": {}
+              "id": "renameByRegex",
+              "options": {
+                "regex": "Value.*",
+                "rename": "Logs (5m)"
+              }
             },
             {
               "id": "organize",
@@ -917,13 +920,8 @@ data:
                 "excludeByName": {
                   "Time": true
                 },
-                "indexByName": {
-                  "hostname": 0,
-                  "Logs (5m)": 1
-                },
-                "renameByName": {
-                  "Value": "Logs (5m)"
-                }
+                "indexByName": {},
+                "renameByName": {}
               }
             }
           ],
