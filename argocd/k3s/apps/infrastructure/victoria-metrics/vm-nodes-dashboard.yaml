@@ -859,6 +859,22 @@ data:
                     "value": 300
                   }
                 ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Value"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Logs (5m)"
+                  },
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  }
+                ]
               }
             ]
           },
@@ -880,7 +896,13 @@ data:
               ],
               "show": false
             },
-            "showHeader": true
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": true,
+                "displayName": "Value"
+              }
+            ]
           },
           "targets": [
             {
@@ -891,7 +913,7 @@ data:
               "editorMode": "code",
               "expr": "sum by (hostname) (count_over_time({job=\"fluent-bit\",log_type=\"syslog\",hostname=~\".+\"}[5m]))",
               "instant": true,
-              "queryType": "range",
+              "queryType": "instant",
               "refId": "A",
               "format": "table"
             }
