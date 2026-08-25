@@ -898,17 +898,32 @@ data:
               "expr": "sum by (hostname) (count_over_time({job=\"fluent-bit\",log_type=\"syslog\",hostname=~\".+\"}[5m]))",
               "instant": true,
               "queryType": "instant",
-              "refId": "A",
-              "format": "table"
+              "refId": "A"
             }
           ],
           "title": "Log Influx by VM (5m)",
           "transformations": [
             {
-              "id": "renameByRegex",
+              "id": "labelsToFields",
+              "options": {}
+            },
+            {
+              "id": "concat",
+              "options": {}
+            },
+            {
+              "id": "organize",
               "options": {
-                "regex": "Value.*",
-                "rename": "Logs (5m)"
+                "excludeByName": {
+                  "Time": true
+                },
+                "indexByName": {
+                  "hostname": 0,
+                  "Logs (5m)": 1
+                },
+                "renameByName": {
+                  "Value": "Logs (5m)"
+                }
               }
             }
           ],
