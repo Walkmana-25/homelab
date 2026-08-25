@@ -70,3 +70,33 @@ All run from `ansible/`. Default inventory is staging (`ansible.cfg`).
 
 - Ansible collection `k3s-io/k3s-ansible` is pinned to a **specific git SHA** in `ansible/requirements.yml` (not a release tag).
 - Renovate is configured to auto-update ArgoCD apps, Helm values, GitHub Actions, and Ansible deps weekly (Monday before 9am JST).
+
+## Observability Stack
+
+### Architecture
+
+- Metrics: node_exporter (installed on VMs via Ansible) -> technitium-sd (Technitium DNS zones -> Prometheus HTTP SD, 30s poll) -> vmagent -> VictoriaMetrics (vmsingle). Registering a DNS A record is the only onboarding step for metrics.
+- Logs (VMs): fluent-bit (journald) -> k3s-router nginx reverse proxy on port 3100 (DNS name k3s-router.k8s.cloud-milky.solufit.net) -> metallb LoadBalancer 10.2.0.110:3100 -> Loki. The nginx proxy on the router decouples VM-side config from cluster internals.
+- Logs (k8s pods): fluent-bit DaemonSet -> Loki (log_type=container).
+- New VM onboarding: register DNS A record (metrics auto-start) + run scripts/install-fluent-bit.sh one-liner (logs start). The script is byte-identical to the fluent_bit Ansible role.
+
+### Verified pitfalls (do not reintroduce)
+
+- The fluent-bit deb package does NOT create a service user (postinst only runs ldconfig/daemon-reload; the unit runs as root). Create the fluent-bit user/group BEFORE the buffer directory task or `install -o` fails on fresh VMs.
+- LogQL regex line filter operator is `|~` (`|=~` is invalid syntax). Case-insensitive: `|~ "(?i)pattern"`.
+- Select VM syslog streams with `hostname=~".+"` — k8s container logs from the DaemonSet have no hostname label and will pollute VM-scoped panels.
+- On VM agents the `service_name` label is always fluent-bit (useless). Filter by systemd unit instead: `| json unit="SYSTEMD_UNIT"`.
+- nginx on k3s-router MUST keep `access_log off` — the router's own journald is collected by fluent-bit, so access logging creates an amplification loop.
+- Template-cloned VMs share the same /etc/machine-id (known, accepted — hostnames never change; regenerate per-VM if that assumption changes).
+
+### Grafana dashboards (ConfigMap + sidecar)
+
+- Dashboards are ConfigMaps (label grafana_dashboard: "1", namespace monitoring) auto-loaded by the Grafana sidecar. After a ConfigMap change, propagation to Grafana takes a few minutes — verify the served definition via the Grafana API before concluding a dashboard fix failed.
+- Loki instant metric queries in a table panel return one [Time, Value] frame per series with labels on the Value field. Working transform chain: labelsToFields -> (let the table panel merge frames itself) -> renameByRegex. Do NOT use `concat` (renders empty) or `organize.indexByName` with renamed columns.
+- renameByRegex options key is `renamePattern` (NOT `rename` — an unknown key is silently ignored and the default `$1` replacement is applied, showing a literal "$1" column). Avoid parentheses in rename values.
+- journald level filtering: `| json priority="PRIORITY" | priority=~"[0-3]"` for error-level (emerg/alert/crit/err).
+
+### Local environment quirks
+
+- `commit.gpgsign=true` is set but no signing key is configured. Commit with `-c commit.gpgsign=false` (do not change git config).
+- Ansible commands require `LC_ALL=C.UTF-8` (system locales are not generated; plain runs fail with "could not initialize the preferred locale").
