@@ -61,6 +61,13 @@
   become: true
   notify: Restart fluent-bit
 
+- name: Add fluent-bit user to systemd-journal group
+  ansible.builtin.user:
+    name: "{{ fluent_bit_user }}"
+    groups: systemd-journal
+    append: true
+  become: true
+
 - name: Create Fluent Bit buffer directory
   ansible.builtin.file:
     path: /var/lib/fluent-bit/buffer
@@ -68,13 +75,6 @@
     owner: "{{ fluent_bit_user }}"
     group: "{{ fluent_bit_group }}"
     mode: "0750"
-  become: true
-
-- name: Add fluent-bit user to systemd-journal group
-  ansible.builtin.user:
-    name: "{{ fluent_bit_user }}"
-    groups: systemd-journal
-    append: true
   become: true
 
 - name: Enable and start fluent-bit service

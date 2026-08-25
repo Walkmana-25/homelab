@@ -49,6 +49,18 @@ echo "deb [signed-by=/etc/apt/keyrings/fluentbit.gpg] https://packages.fluentbit
 echo ">>> Installing fluent-bit..."
 apt-get update -qq && apt-get install -y -qq fluent-bit
 
+# 6b. Ensure the fluent-bit service user/group exist.
+#     The fluent-bit deb package does NOT create a service user (postinst only
+#     runs ldconfig/daemon-reload and the unit runs as root).  Create the user
+#     defensively so ownership and group membership are deterministic.
+echo ">>> Ensuring fluent-bit user/group exist..."
+if ! getent group "$FLUENT_BIT_GROUP" >/dev/null 2>&1; then
+    groupadd --system "$FLUENT_BIT_GROUP"
+fi
+if ! getent passwd "$FLUENT_BIT_USER" >/dev/null 2>&1; then
+    useradd --system --gid "$FLUENT_BIT_GROUP" --no-create-home --shell /usr/sbin/nologin "$FLUENT_BIT_USER"
+fi
+
 # 7. Create the config directory (role task: "Create Fluent Bit config directory").
 echo ">>> Creating $(dirname "$CONFIG_PATH")..."
 install -d -o root -g root -m 0755 "$(dirname "$CONFIG_PATH")"
