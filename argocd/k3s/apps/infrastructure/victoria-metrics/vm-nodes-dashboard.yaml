@@ -884,7 +884,7 @@ data:
             "sortBy": [
               {
                 "desc": true,
-                "displayName": "Logs (5m)"
+                "displayName": "Logs 5m"
               }
             ]
           },
@@ -901,7 +901,7 @@ data:
               "refId": "A"
             }
           ],
-          "title": "Log Influx by VM (5m)",
+          "title": "Log Influx by VM 5m",
           "transformations": [
             {
               "id": "labelsToFields",
@@ -911,7 +911,7 @@ data:
               "id": "renameByRegex",
               "options": {
                 "regex": "Value.*",
-                "rename": "Logs (5m)"
+                "rename": "Logs 5m"
               }
             },
             {
