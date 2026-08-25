@@ -15,7 +15,7 @@
 #
 set -euo pipefail
 
-LOKI_HOST="${LOKI_HOST:-k3s-router.k8s.cloud-milky.solufit.net}"
+LOKI_HOST="${LOKI_HOST:-k3s-router.vm.cloud-milky.solufit.net}"
 LOKI_PORT="${LOKI_PORT:-3100}"
 FLUENT_BIT_USER="fluent-bit"
 FLUENT_BIT_GROUP="fluent-bit"
