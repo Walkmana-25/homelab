@@ -6,3 +6,4 @@ resources:
   - vm-nodes-dashboard.yaml
   - vm-nodes-overview-dashboard.yaml
   - vm-logs-dashboard.yaml
+  - k8s-logs-dashboard.yaml
