@@ -66,11 +66,18 @@ spec:
           outputs: |
             [OUTPUT]
                 Name          loki
-                Match         *
+                Match         kube.*
                 Host          loki.monitoring.svc.cluster.local
                 Port          3100
                 labels        job=fluent-bit, log_type=$log_type, namespace=$kubernetes['namespace_name'], pod=$kubernetes['pod_name'], container=$kubernetes['container_name']
                 auto_kubernetes_labels on
+
+            [OUTPUT]
+                Name          loki
+                Match         host.*
+                Host          loki.monitoring.svc.cluster.local
+                Port          3100
+                labels        job=fluent-bit, log_type=$log_type
         extraVolumes:
           - name: journal
             hostPath:
