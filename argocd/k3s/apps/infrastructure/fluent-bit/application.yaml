@@ -20,6 +20,20 @@ spec:
     helm:
       values: |
         config:
+          customParsers: |
+            [PARSER]
+                Name docker_no_time
+                Format json
+                Time_Keep Off
+                Time_Key time
+                Time_Format %Y-%m-%dT%H:%M:%S.%L
+
+            [PARSER]
+                Name docker
+                Format json
+                Time_Key time
+                Time_Format %Y-%m-%dT%H:%M:%S.%L
+                Time_Keep On
           service: |
             [SERVICE]
                 Flush         10
@@ -34,6 +48,7 @@ spec:
                 Name              tail
                 Path              /var/log/containers/*.log
                 multiline.parser  docker, cri
+                Parser            docker
                 Tag               kube.*
                 Mem_Buf_Limit     5MB
                 Skip_Long_Lines   On
@@ -49,7 +64,7 @@ spec:
             [FILTER]
                 Name                kubernetes
                 Match               kube.*
-                Merge_Log           On
+                Merge_Log           Off
                 Keep_Log            Off
                 K8S-Logging.Parser  On
                 K8S-Logging.Exclude On
