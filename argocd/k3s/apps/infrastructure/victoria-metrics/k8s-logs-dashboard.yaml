@@ -395,7 +395,7 @@ data:
                 "uid": "${DS}"
               },
               "editorMode": "code",
-              "expr": "{job=\"fluent-bit\",log_type=\"container\",namespace=~\"$namespace\",pod=~\"$pod\",container=~\"$container\"} |~ \"(?i)$search\"",
+              "expr": "{job=\"fluent-bit\",log_type=\"container\",namespace=~\"$namespace\",pod=~\"$pod\",container=~\"$container\"} | json | line_format \"{{ with .log }}{{ . }}{{ else }}{{ .msg }}{{ end }}\" |~ \"(?i)$search\"",
               "queryType": "range",
               "refId": "A"
             }
