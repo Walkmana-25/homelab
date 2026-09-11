@@ -18,7 +18,7 @@ spec:
   source:
     chart: librechat
     repoURL: ghcr.io/danny-avila/librechat-chart
-    targetRevision: 2.0.8
+    targetRevision: 2.0.9
     helm:
       values: |
         # Stopped 2026-08-22: data-loss incident during storage migration
