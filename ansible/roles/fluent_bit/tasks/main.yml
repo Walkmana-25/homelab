@@ -27,6 +27,7 @@
   ansible.builtin.shell:
     cmd: gpg --batch --yes --dearmor -o /etc/apt/keyrings/fluentbit.gpg < /tmp/fluentbit.asc
   become: true
+  changed_when: false
 
 - name: Add Fluent Bit APT repository
   ansible.builtin.apt_repository:
