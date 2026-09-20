@@ -1,0 +1,288 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-alert-rules-storage
+  namespace: monitoring
+  labels:
+    grafana_alert: "1"
+    app.kubernetes.io/part-of: infrastructure
+    app.kubernetes.io/name: grafana
+data:
+  storage.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: storage
+        folder: Homelab
+        interval: 1m
+        rules:
+          - uid: pvc-pending
+            title: PVCPending
+            condition: B
+            for: 15m
+            noDataState: OK
+            execErrState: Error
+            annotations:
+              summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is stuck Pending"
+            labels:
+              severity: critical
+            isPaused: false
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: victoriametrics
+                model:
+                  datasource:
+                    type: prometheus
+                    uid: victoriametrics
+                  editorMode: code
+                  expr: kube_persistentvolumeclaim_status_phase{phase="Pending"} == bool 1
+                  instant: true
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: false
+                  refId: A
+              - refId: B
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - B
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold
+          - uid: pv-failed
+            title: PVFailed
+            condition: B
+            for: 5m
+            noDataState: OK
+            execErrState: Error
+            annotations:
+              summary: "PV {{ $labels.persistentvolume }} is in Failed phase"
+            labels:
+              severity: critical
+            isPaused: false
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: victoriametrics
+                model:
+                  datasource:
+                    type: prometheus
+                    uid: victoriametrics
+                  editorMode: code
+                  expr: kube_persistentvolume_status_phase{phase="Failed"} == bool 1
+                  instant: true
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: false
+                  refId: A
+              - refId: B
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - B
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold
+          - uid: pvc-usage-high
+            title: PVCUsageHigh
+            condition: B
+            for: 10m
+            noDataState: OK
+            execErrState: Error
+            annotations:
+              summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} usage above 90%"
+            labels:
+              severity: warning
+            isPaused: false
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: victoriametrics
+                model:
+                  datasource:
+                    type: prometheus
+                    uid: victoriametrics
+                  editorMode: code
+                  expr: 100 * kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes < bool 10
+                  instant: true
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: false
+                  refId: A
+              - refId: B
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - B
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold
+          - uid: pvc-filling-soon
+            title: PVCFillingSoon
+            condition: B
+            for: 30m
+            noDataState: OK
+            execErrState: Error
+            annotations:
+              summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} predicted to fill within 24h"
+            labels:
+              severity: warning
+            isPaused: false
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: victoriametrics
+                model:
+                  datasource:
+                    type: prometheus
+                    uid: victoriametrics
+                  editorMode: code
+                  expr: predict_linear(kubelet_volume_stats_available_bytes[6h], 86400) < bool 0
+                  instant: true
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: false
+                  refId: A
+              - refId: B
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - B
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold
+          - uid: storageclass-capacity-high
+            title: StorageClassCapacityHigh
+            condition: B
+            for: 15m
+            noDataState: OK
+            execErrState: Error
+            annotations:
+              summary: "StorageClass {{ $labels.storageclass }} aggregate usage above 85%"
+            labels:
+              severity: warning
+            isPaused: false
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: victoriametrics
+                model:
+                  datasource:
+                    type: prometheus
+                    uid: victoriametrics
+                  editorMode: code
+                  expr: 100 * sum by (storageclass) (kubelet_volume_stats_used_bytes * on (namespace, persistentvolumeclaim) group_left (storageclass) kube_persistentvolumeclaim_info) / sum by (storageclass) (kubelet_volume_stats_capacity_bytes * on (namespace, persistentvolumeclaim) group_left (storageclass) kube_persistentvolumeclaim_info) > bool 85
+                  instant: true
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: false
+                  refId: A
+              - refId: B
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - B
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold

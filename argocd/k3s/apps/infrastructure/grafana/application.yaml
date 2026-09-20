@@ -26,12 +26,14 @@ spec:
             apiVersion: 1
             datasources:
               - name: VictoriaMetrics
+                uid: victoriametrics
                 type: prometheus
                 url: http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc.cluster.local:8428
 
                 isDefault: false
                 editable: true
               - name: Loki
+                uid: loki
                 type: loki
                 access: proxy
                 url: http://loki.monitoring.svc.cluster.local:3100
@@ -78,6 +80,11 @@ spec:
           datasources:
             enabled: true
             label: grafana_datasource
+            labelValue: "1"
+            searchNamespace: monitoring
+          alerts:
+            enabled: true
+            label: grafana_alert
             labelValue: "1"
             searchNamespace: monitoring
         ingress:

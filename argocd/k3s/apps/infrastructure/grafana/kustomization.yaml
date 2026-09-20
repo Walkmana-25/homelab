@@ -5,3 +5,7 @@ resources:
   - application.yaml
   - grafana-admin-secret.yaml
   - grafana-alerting-secrets.yaml
+  - alert-rules/nodes.yaml
+  - alert-rules/k8s.yaml
+  - alert-rules/storage.yaml
+  - alert-rules/meta.yaml
