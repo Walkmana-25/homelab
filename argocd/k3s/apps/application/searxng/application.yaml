@@ -74,6 +74,14 @@ spec:
 
               botdetection:
                 ip_limit: false
+
+              # Explicitly enable bing & mojeek (disabled/inactive by default)
+              engines:
+                - name: bing
+                  disabled: false
+                - name: mojeek
+                  disabled: false
+                  inactive: false
           limiter:
             enabled: false
           uwsgi:
