@@ -1,0 +1,36 @@
+# RBAC for the searxng-image-updater CronJob (minimum permissions to restart the searxng deployment)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: searxng-image-updater
+  namespace: searxng
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: searxng-image-updater
+  namespace: searxng
+rules:
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    resourceNames:
+      - searxng
+    verbs:
+      - get
+      - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: searxng-image-updater
+  namespace: searxng
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: searxng-image-updater
+subjects:
+  - kind: ServiceAccount
+    name: searxng-image-updater
+    namespace: searxng

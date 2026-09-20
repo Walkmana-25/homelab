@@ -17,12 +17,15 @@ spec:
     targetRevision: 1.1.4
     helm:
       values: |
-        replicaCount: 1
+        replicaCount: 2
 
+        # chart kubito/searxng 1.1.4 references .Values.image.pullPolicy, but its values.yaml
+        # defines imagePullPolicy; set both keys to Always until the chart is fixed
         image:
           repository: searxng/searxng
-          tag: 2026.4.17-e8299a4c3
-          imagePullPolicy: IfNotPresent
+          tag: latest
+          pullPolicy: Always
+          imagePullPolicy: Always
 
         env:
           - name: TZ
@@ -100,3 +103,11 @@ spec:
         duration: 5s
         factor: 2
         maxDuration: 3m
+  # Keep the restartedAt annotation set by the searxng-image-updater CronJob
+  # so selfHeal does not revert the rollout restart
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: searxng
+      jsonPointers:
+        - /spec/template/metadata/annotations

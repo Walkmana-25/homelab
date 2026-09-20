@@ -33,6 +33,14 @@
       "depNameTemplate": "argo-cd",
       "datasourceTemplate": "helm",
       "registryUrlTemplate": "https://argoproj.github.io/argo-helm"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^k8s/apps/searxng/cronjob\\.yaml$/"],
+      "matchStrings": ["image:\\s*registry\\.k8s\\.io/kubectl:(?<currentValue>\\S+)"],
+      "depNameTemplate": "registry.k8s.io/kubectl",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "semver-coerced"
     }
   ],
   "packageRules": [

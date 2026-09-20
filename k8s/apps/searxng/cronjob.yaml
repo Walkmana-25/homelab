@@ -1,0 +1,53 @@
+# Restart the searxng deployment daily at 04:00 JST so pods pull the latest image
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: searxng-image-updater
+  namespace: searxng
+spec:
+  schedule: "0 4 * * *"
+  timeZone: Asia/Tokyo
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 300
+      backoffLimit: 2
+      template:
+        spec:
+          serviceAccountName: searxng-image-updater
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: kubectl
+              image: registry.k8s.io/kubectl:v1.33.4
+              imagePullPolicy: IfNotPresent
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+              command:
+                - kubectl
+                - rollout
+                - restart
+                - deployment/searxng
+                - -n
+                - searxng
+              env:
+                # kubectl writes its discovery cache under $HOME; point it to the writable /tmp
+                - name: HOME
+                  value: /tmp
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi

@@ -9,4 +9,5 @@ resources:
   - mcp-proxy
   - searxng-mcp
   - searxng
+  - searxng-image-updater
   - simpleapp
