@@ -26,7 +26,8 @@ CONFIG_PATH="/etc/fluent-bit/fluent-bit.conf"
 
 # 2. Install prerequisites (role task: "Install prerequisites").
 echo ">>> Installing prerequisite packages..."
-apt-get update -qq && apt-get install -y -qq apt-transport-https gnupg2 curl
+apt-get update -qq && apt-get install -y -qq apt-transport-https gnupg2 curl prometheus-node-exporter
+sudo systemctl enable --now prometheus-node-exporter
 
 # 3. Create keyrings directory (role task: "Create keyrings directory").
 echo ">>> Creating /etc/apt/keyrings..."
