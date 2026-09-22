@@ -21,6 +21,7 @@ spec:
       values: |
         deploymentStrategy:
           type: Recreate
+          rollingUpdate: null
         admin:
           existingSecret: grafana-admin-secret
         datasources:
