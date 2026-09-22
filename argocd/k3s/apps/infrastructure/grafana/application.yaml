@@ -19,6 +19,8 @@ spec:
     targetRevision: 10.5.15
     helm:
       values: |
+        deploymentStrategy:
+          type: Recreate
         admin:
           existingSecret: grafana-admin-secret
         datasources:
