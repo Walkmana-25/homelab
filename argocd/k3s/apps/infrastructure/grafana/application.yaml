@@ -26,6 +26,9 @@ spec:
             maxUnavailable: 1
         admin:
           existingSecret: grafana-admin-secret
+        grafana.ini:
+          server:
+            root_url: https://grafana-k8s.lapis-dev.work
         datasources:
           datasources.yaml:
             apiVersion: 1
