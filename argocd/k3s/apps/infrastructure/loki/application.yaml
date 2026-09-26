@@ -66,8 +66,8 @@ spec:
               cpu: 100m
               memory: 256Mi
             limits:
-              cpu: 500m
-              memory: 1Gi
+              cpu: 1000m
+              memory: 2Gi
 
         # Disable all other deployment modes
         backend:
