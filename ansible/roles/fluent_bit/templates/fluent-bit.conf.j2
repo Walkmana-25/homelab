@@ -22,3 +22,4 @@
     Port              {{ fluent_bit_loki_port }}
     labels            job=fluent-bit, log_type=syslog, hostname=$HOSTNAME
     Retry_Limit       False
+    storage.total_limit_size {{ fluent_bit_storage_total_limit_size }}

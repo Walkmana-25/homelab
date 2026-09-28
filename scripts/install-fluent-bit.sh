@@ -97,6 +97,7 @@ cat > "$TMP_CONF" <<EOF
     Port              ${LOKI_PORT}
     labels            job=fluent-bit, log_type=syslog, hostname=\$HOSTNAME
     Retry_Limit       False
+    storage.total_limit_size 1G
 EOF
 
 NEED_RESTART=0
