@@ -56,6 +56,8 @@ spec:
             retention_delete_delay: 2h
             delete_request_cancel_period: 2h
             delete_request_store: filesystem
+          ingester:
+            max_chunk_age: 336h
 
         singleBinary:
           replicas: 1
