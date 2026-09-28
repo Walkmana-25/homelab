@@ -43,6 +43,8 @@ spec:
                 HTTP_Server   On
                 HTTP_Listen   0.0.0.0
                 HTTP_Port     2020
+                scheduler.base   30
+                scheduler.cap    600
           inputs: |
             [INPUT]
                 Name              tail

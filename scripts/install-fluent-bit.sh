@@ -80,6 +80,8 @@ cat > "$TMP_CONF" <<EOF
     Parsers_File  parsers.conf
     storage.path  /var/lib/fluent-bit/buffer
     storage.sync  normal
+    scheduler.base   30
+    scheduler.cap    600
 
 [INPUT]
     Name              systemd
