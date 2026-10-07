@@ -62,7 +62,7 @@ install-k3s:
 	ansible-playbook -vv -i inventories/k3s/inventory.yml playbooks/argocd.yml
 
 upgrade-k3s:
-	ansible-playbook -vv k3s.orchestration.site -i inventories/k3s/inventory.yml --tags upgrade
+	ansible-playbook -vv k3s.orchestration.upgrade -i inventories/k3s/inventory.yml
 
 reboot-k3s:
 	ansible -vv k3s_cluster -i inventories/k3s/inventory.yml -m ansible.builtin.reboot --become
