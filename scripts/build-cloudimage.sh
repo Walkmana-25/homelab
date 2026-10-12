@@ -5,7 +5,8 @@
 #
 # Pipeline:
 #   1. Download the official resolute cloudimg + SHA256SUMS and verify.
-#   1b. Enlarge the working copy by EXTRA_DISK_GB (virt-resize --expand):
+#   1b. Enlarge the working copy by EXTRA_DISK_GB (virt-resize --expand
+#      --no-expand-content; the fs itself is grown in-guest in step 2):
 #      the pristine cloudimg (~2GB virtual) overflows during the bake
 #      ("No space left on device"). The GPT layout is sda1=/ followed by
 #      sda14 (BIOS boot) + sda15 (EFI), so sda1 cannot be grown in place.
@@ -213,18 +214,22 @@ fi
 # disk and expand the root partition BEFORE virt-customize runs.
 # virt-resize (not in-place part-resize): the GPT layout is sda1=/ followed
 # by sda14/sda15, so sda1 cannot be extended in place; virt-resize
-# rearranges and expands it, resizing the ext4 content automatically.
+# rearranges and expands the partition here.
+# --no-expand-content is REQUIRED: the 22.04 runner's e2fsck/resize2fs
+# (1.46.x) cannot handle the resolute image's newer ext4 features
+# ("unsupported feature(s): FEATURE_C12"). The filesystem itself is grown
+# inside the guest in step 2, where e2fsprogs matches the filesystem.
 EXPANDED_IMG="${WORKDIR}/expanded.img"
 if [ "$DRY_RUN" -eq 1 ]; then
     echo "[dry-run] truncate -r ${WORK_IMG} ${EXPANDED_IMG} && truncate -s +${EXTRA_DISK_GB}G ${EXPANDED_IMG}"
-    echo "[dry-run] virt-resize --expand /dev/sda1 ${WORK_IMG} ${EXPANDED_IMG} && mv ${EXPANDED_IMG} ${WORK_IMG}"
+    echo "[dry-run] virt-resize --expand /dev/sda1 --no-expand-content ${WORK_IMG} ${EXPANDED_IMG} && mv ${EXPANDED_IMG} ${WORK_IMG}"
 else
     log "Enlarging working copy by ${EXTRA_DISK_GB}G and expanding /dev/sda1..."
     if ! truncate -r "$WORK_IMG" "$EXPANDED_IMG" \
         || ! truncate -s "+${EXTRA_DISK_GB}G" "$EXPANDED_IMG"; then
         die "failed to pre-size expanded image"
     fi
-    virt-resize --expand /dev/sda1 "$WORK_IMG" "$EXPANDED_IMG" \
+    virt-resize --expand /dev/sda1 --no-expand-content "$WORK_IMG" "$EXPANDED_IMG" \
         || die "virt-resize --expand /dev/sda1 failed"
     mv "$EXPANDED_IMG" "$WORK_IMG"
 fi
@@ -232,16 +237,20 @@ fi
 # --- Step 2: virt-customize bake ------------------------------------------
 # Single invocation (one appliance boot): proxy files first so the later
 # apt runs inside bake-fluent-bit.sh already use Proxy-Auto-Detect
-# (DIRECT fallback outside the LAN), then fluent-bit, then multipathd.
+# (DIRECT fallback outside the LAN), then grow the root filesystem with the
+# GUEST's own resize2fs (see step 1b note), then fluent-bit, then multipathd.
+# Root is located by label first (virt-resize may renumber partitions).
+GROWFS_CMD='ROOTDEV=$(blkid -L cloudimg-rootfs 2>/dev/null || blkid -t TYPE=ext4 -o device 2>/dev/null | head -n 1) || true; [ -n "$ROOTDEV" ] || { echo "root device not found" >&2; exit 1; }; resize2fs "$ROOTDEV"'
 MULTIPATHD_CMD="systemctl stop multipathd.socket multipathd.service || true; systemctl disable multipathd.socket multipathd.service || true; systemctl mask multipathd.socket multipathd.service || true"
 if [ "$DRY_RUN" -eq 1 ]; then
-    echo "[dry-run] virt-customize -a ${WORK_IMG} --copy-in ${PROXY_CONF}:/etc/apt/apt.conf.d/ --copy-in ${PROXY_DETECT}:/usr/local/ --run-command 'chmod 0755 ${GUEST_PROXY_DETECT}' --run ${BAKE_SCRIPT} --run-command '${MULTIPATHD_CMD}'"
+    echo "[dry-run] virt-customize -a ${WORK_IMG} --copy-in ${PROXY_CONF}:/etc/apt/apt.conf.d/ --copy-in ${PROXY_DETECT}:/usr/local/ --run-command 'chmod 0755 ${GUEST_PROXY_DETECT}' --run-command '${GROWFS_CMD}' --run ${BAKE_SCRIPT} --run-command '${MULTIPATHD_CMD}'"
 else
     log "Baking proxy config, fluent-bit, and multipathd masking..."
     run virt-customize -a "$WORK_IMG" \
         --copy-in "${PROXY_CONF}:/etc/apt/apt.conf.d/" \
         --copy-in "${PROXY_DETECT}:/usr/local/" \
         --run-command "chmod 0755 ${GUEST_PROXY_DETECT}" \
+        --run-command "$GROWFS_CMD" \
         --run "$BAKE_SCRIPT" \
         --run-command "$MULTIPATHD_CMD" \
         || die "virt-customize bake failed"
