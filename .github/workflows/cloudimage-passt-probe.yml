@@ -50,5 +50,8 @@ jobs:
           df -h /var/tmp /tmp | head -n 5
 
       - name: Boot libguestfs appliance (exercises passt spawn)
+        # NOTE: must run as root — /boot/vmlinuz is only readable by root
+        # on ubuntu-latest, and supermin copies it when building the
+        # appliance (fails with Permission denied as non-root).
         run: |
-          guestfish -a /dev/null run : list-devices
+          sudo guestfish -a /dev/null run : list-devices
