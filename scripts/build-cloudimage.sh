@@ -5,6 +5,10 @@
 #
 # Pipeline:
 #   1. Download the official resolute cloudimg + SHA256SUMS and verify.
+#   1b. Enlarge the working copy by EXTRA_DISK_GB (virt-resize --expand):
+#      the pristine cloudimg (~2GB virtual) overflows during the bake
+#      ("No space left on device"). The GPT layout is sda1=/ followed by
+#      sda14 (BIOS boot) + sda15 (EFI), so sda1 cannot be grown in place.
 #   2. virt-customize: bake the apt proxy config, fluent-bit (build-time
 #      portion of scripts/install-fluent-bit.sh), and multipathd masking
 #      (mirrors ansible/roles/common, socket first, masked).
@@ -28,6 +32,7 @@
 #   BASE_IMAGE_URL  official cloudimg URL
 #                   (default: https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img)
 #   OUTPUT          output qcow2 path (default: resolute-btrfs-cloudimg-amd64.qcow2)
+#   EXTRA_DISK_GB   GiB to add to the working copy before baking (default: 10)
 #   WORKDIR         scratch directory (default: a fresh mktemp -d, removed on exit)
 #   ALLOW_GRUB_FAILURE=1
 #                 opt-in to tolerate an update-grub failure inside the offline
@@ -57,6 +62,7 @@ set -euo pipefail
 
 BASE_IMAGE_URL="${BASE_IMAGE_URL:-https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img}"
 OUTPUT="${OUTPUT:-resolute-btrfs-cloudimg-amd64.qcow2}"
+EXTRA_DISK_GB="${EXTRA_DISK_GB:-10}"
 WORKDIR="${WORKDIR:-}"
 DRY_RUN=0
 
@@ -84,6 +90,7 @@ Options:
 Environment:
   BASE_IMAGE_URL  default: ${BASE_IMAGE_URL}
   OUTPUT          default: ${OUTPUT}
+  EXTRA_DISK_GB   default: ${EXTRA_DISK_GB}
   WORKDIR         default: <fresh mktemp -d>
   ALLOW_GRUB_FAILURE=1  tolerate update-grub failure (default: fatal)
 EOF
@@ -140,10 +147,14 @@ if [ "$DRY_RUN" -eq 0 ] && [ "$(id -u)" -ne 0 ]; then
     die "must run as root (qemu-nbd/mount require privileges); re-run with sudo"
 fi
 
+case "$EXTRA_DISK_GB" in
+    ''|*[!0-9]*|0) die "EXTRA_DISK_GB must be a positive integer (got: '${EXTRA_DISK_GB}')" ;;
+esac
+
 check_deps() {
     local missing=0
     local cmd
-    for cmd in curl sha256sum virt-customize virt-sysprep virt-filesystems guestfish qemu-img qemu-nbd btrfs-convert awk grep mount umount lsblk; do
+    for cmd in curl sha256sum virt-customize virt-resize virt-sysprep virt-filesystems guestfish qemu-img qemu-nbd truncate btrfs-convert awk grep mount umount lsblk; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             echo "missing required command: $cmd" >&2
             missing=1
@@ -160,7 +171,7 @@ check_deps() {
 trap cleanup EXIT
 
 if [ "$DRY_RUN" -eq 1 ]; then
-    echo "[dry-run] dependency check: curl sha256sum virt-customize virt-sysprep virt-filesystems guestfish qemu-img qemu-nbd btrfs-convert awk grep mount umount lsblk"
+    echo "[dry-run] dependency check: curl sha256sum virt-customize virt-resize virt-sysprep virt-filesystems guestfish qemu-img qemu-nbd truncate btrfs-convert awk grep mount umount lsblk"
     echo "[dry-run] required inputs: $BAKE_SCRIPT $PROXY_CONF $PROXY_DETECT"
 else
     check_deps
@@ -194,6 +205,27 @@ else
         || die "SHA256 verification failed for ${IMAGE_NAME}"
     log "Copying base image to working copy (keeping the download pristine)..."
     cp "${WORKDIR}/${IMAGE_NAME}" "$WORK_IMG"
+fi
+
+# --- Step 1b: enlarge the working copy -------------------------------------
+# The pristine cloudimg (~2GB virtual) overflows during the bake
+# (node-exporter deps + fluent-bit: "No space left on device"), so grow the
+# disk and expand the root partition BEFORE virt-customize runs.
+# virt-resize (not in-place part-resize): the GPT layout is sda1=/ followed
+# by sda14/sda15, so sda1 cannot be extended in place; virt-resize
+# rearranges and expands it, resizing the ext4 content automatically.
+EXPANDED_IMG="${WORKDIR}/expanded.img"
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "[dry-run] truncate -r ${WORK_IMG} ${EXPANDED_IMG} && truncate -s +${EXTRA_DISK_GB}G ${EXPANDED_IMG}"
+    echo "[dry-run] virt-resize --expand /dev/sda1 ${WORK_IMG} ${EXPANDED_IMG} && mv ${EXPANDED_IMG} ${WORK_IMG}"
+else
+    log "Enlarging working copy by ${EXTRA_DISK_GB}G and expanding /dev/sda1..."
+    truncate -r "$WORK_IMG" "$EXPANDED_IMG" \
+        && truncate -s "+${EXTRA_DISK_GB}G" "$EXPANDED_IMG" \
+        || die "failed to pre-size expanded image"
+    virt-resize --expand /dev/sda1 "$WORK_IMG" "$EXPANDED_IMG" \
+        || die "virt-resize --expand /dev/sda1 failed"
+    mv "$EXPANDED_IMG" "$WORK_IMG"
 fi
 
 # --- Step 2: virt-customize bake ------------------------------------------
