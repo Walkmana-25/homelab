@@ -1,0 +1,52 @@
+name: Cloud Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or tag to checkout'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Manual-only image build; cap runaway virt-customize/qemu-nbd hangs.
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v6.1.0
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Install dependencies
+        # NOTE: versions intentionally unpinned — ubuntu-latest is a rolling
+        # image and libguestfs/qemu/btrfs-progs have no stable versioned PPA
+        # here; pinning would rot. ShellCheck + --dry-run smoke the scripts
+        # before the real build, and the base cloudimg is checksum-verified
+        # (TLS + SHA256SUMS; no gpgv — see scripts/build-cloudimage.sh
+        # "Supply-chain note" for the reasoned acceptance).
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libguestfs-tools qemu-utils btrfs-progs shellcheck
+
+      - name: ShellCheck and syntax check
+        run: |
+          shellcheck scripts/build-cloudimage.sh scripts/cloudimage/bake-fluent-bit.sh scripts/cloudimage/apt-cacher-proxy-detect.sh
+          bash -n scripts/build-cloudimage.sh
+          bash -n scripts/cloudimage/bake-fluent-bit.sh
+          bash -n scripts/cloudimage/apt-cacher-proxy-detect.sh
+
+      - name: Build cloud image
+        run: |
+          sudo bash scripts/build-cloudimage.sh
+
+      - name: Upload qcow2 artifact
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: resolute-btrfs-cloudimg-amd64
+          path: resolute-btrfs-cloudimg-amd64.qcow2
+          retention-days: 7
