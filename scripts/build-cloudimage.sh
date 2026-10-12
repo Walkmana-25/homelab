@@ -240,6 +240,7 @@ fi
 # (DIRECT fallback outside the LAN), then grow the root filesystem with the
 # GUEST's own resize2fs (see step 1b note), then fluent-bit, then multipathd.
 # Root is located by label first (virt-resize may renumber partitions).
+# shellcheck disable=SC2016 # $-expressions expand in the guest, not here.
 GROWFS_CMD='ROOTDEV=$(blkid -L cloudimg-rootfs 2>/dev/null || blkid -t TYPE=ext4 -o device 2>/dev/null | head -n 1) || true; [ -n "$ROOTDEV" ] || { echo "root device not found" >&2; exit 1; }; resize2fs "$ROOTDEV"'
 MULTIPATHD_CMD="systemctl stop multipathd.socket multipathd.service || true; systemctl disable multipathd.socket multipathd.service || true; systemctl mask multipathd.socket multipathd.service || true"
 if [ "$DRY_RUN" -eq 1 ]; then
