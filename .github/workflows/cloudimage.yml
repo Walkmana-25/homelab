@@ -18,7 +18,7 @@ jobs:
     # "passt exited with status 1" (24.04 ships an old/buggy passt and there
     # is no env knob to force slirp back). 22.04 predates the passt switch.
     # Revisit when GitHub deprecates the 22.04 image.
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     # Manual-only image build; cap runaway virt-customize/qemu-nbd hangs.
     timeout-minutes: 60
     # Explicit direct backend (no libvirt daemon on hosted runners).
@@ -39,7 +39,7 @@ jobs:
         # "Supply-chain note" for the reasoned acceptance).
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libguestfs-tools qemu-utils btrfs-progs shellcheck
+          sudo apt-get install -y -qq libguestfs-tools qemu-utils btrfs-progs shellcheck passt
 
       - name: ShellCheck and syntax check
         run: |
