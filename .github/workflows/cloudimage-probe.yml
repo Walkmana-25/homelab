@@ -1,0 +1,37 @@
+# TEMPORARY workflow: collects runner facts for the cloudimage pipeline.
+# DELETE THIS FILE (and scripts/probe-runner.sh) once the pipeline is green.
+name: Cloud Image Probe (temporary)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or tag to checkout'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on: [ubuntu-22.04, ubuntu-latest]
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6.1.0
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libguestfs-tools qemu-utils btrfs-progs e2fsprogs
+
+      - name: Run runner probe
+        run: |
+          sudo bash scripts/probe-runner.sh
