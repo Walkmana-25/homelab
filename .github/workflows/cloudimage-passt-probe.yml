@@ -1,0 +1,46 @@
+# TEMPORARY workflow: verifies whether installing passt fixes the
+# "passt exited with status 1" libguestfs failure on ubuntu-latest.
+# Appliance boot via guestfish exercises the exact failing code path
+# (passt spawn at launch) in seconds, without downloading a guest image.
+# DELETE THIS FILE once the pipeline is green.
+name: Cloud Image Passt Probe (temporary)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or tag to checkout'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        install_passt: [true, false]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      LIBGUESTFS_BACKEND: direct
+
+    steps:
+      - uses: actions/checkout@v6.1.0
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libguestfs-tools qemu-utils
+          if [ "${{ matrix.install_passt }}" = "true" ]; then
+            sudo apt-get install -y -qq passt
+          fi
+          command -v passt || echo "NO passt binary"
+
+      - name: Boot libguestfs appliance (exercises passt spawn)
+        run: |
+          guestfish -a /dev/null run : list-devices
