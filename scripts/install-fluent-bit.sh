@@ -6,7 +6,7 @@
 # (ansible/roles/fluent_bit/) so VMs provisioned outside the Ansible
 # inventories can start shipping journald logs with a single command.
 #
-# Usage (run as root on a fresh Ubuntu VM):
+# Usage (run as root on a fresh Ubuntu / AlmaLinux VM):
 #   curl -fsSL https://raw.githubusercontent.com/Walkmana-25/homelab/main/scripts/install-fluent-bit.sh | sudo bash
 #
 # Environment variables:
@@ -24,6 +24,18 @@ CONFIG_PATH="/etc/fluent-bit/fluent-bit.conf"
 # 1. Require root.
 [ "$(id -u)" -eq 0 ] || { echo "must run as root" >&2; exit 1; }
 
+# 1b. Detect the OS family from /etc/os-release.
+#     ubuntu -> apt-based path, almalinux/rhel/rocky/centos (ID or ID_LIKE) -> dnf-based path.
+OS_FAMILY=""
+# shellcheck disable=SC1091
+. /etc/os-release
+case " ${ID:-} ${ID_LIKE:-} " in
+    *" ubuntu "*) OS_FAMILY="debian" ;;
+    *" almalinux "*|*" rhel "*|*" rocky "*|*" centos "*) OS_FAMILY="rhel" ;;
+    *) echo "unsupported OS (ID='${ID:-}' ID_LIKE='${ID_LIKE:-}'): only Ubuntu and AlmaLinux/RHEL/Rocky/CentOS are supported" >&2; exit 1 ;;
+esac
+
+if [ "$OS_FAMILY" = "debian" ]; then
 # 2. Install prerequisites (role task: "Install prerequisites").
 echo ">>> Installing prerequisite packages..."
 apt-get update -qq && apt-get install -y -qq apt-transport-https gnupg2 curl prometheus-node-exporter
@@ -49,6 +61,44 @@ echo "deb [signed-by=/etc/apt/keyrings/fluentbit.gpg] https://packages.fluentbit
 # 6. Install fluent-bit (role task: "Install fluent-bit").
 echo ">>> Installing fluent-bit..."
 apt-get update -qq && apt-get install -y -qq fluent-bit
+elif [ "$OS_FAMILY" = "rhel" ]; then
+# 2r. Install prerequisites via dnf.
+command -v dnf >/dev/null 2>&1 || { echo "dnf not found: AlmaLinux/RHEL path requires dnf" >&2; exit 1; }
+echo ">>> Installing prerequisite packages..."
+command -v curl >/dev/null 2>&1 || dnf install -y --allowerasing curl
+
+# 3r. Add the Fluent Bit YUM repository.
+echo ">>> Adding Fluent Bit YUM repository..."
+cat > /etc/yum.repos.d/fluent-bit.repo <<'EOF'
+[fluent-bit]
+name = Fluent Bit
+baseurl = https://packages.fluentbit.io/almalinux/$releasever/
+gpgcheck = 1
+repo_gpgcheck = 1
+gpgkey = https://packages.fluentbit.io/fluentbit.key
+enabled = 1
+EOF
+
+# 4r. Import the Fluent Bit GPG key.
+echo ">>> Importing Fluent Bit GPG key..."
+rpm --import https://packages.fluentbit.io/fluentbit.key
+
+# 5r/6r. Install fluent-bit.
+echo ">>> Installing fluent-bit..."
+dnf -y makecache
+dnf install -y fluent-bit
+
+# 6br. Install node-exporter on a best-effort basis (EPEL may be required).
+#     A failure here must not fail the whole bootstrap.
+if dnf install -y prometheus-node-exporter; then
+    systemctl enable --now prometheus-node-exporter || echo "warning: failed to enable node-exporter, continuing" >&2
+else
+    echo "warning: could not install prometheus-node-exporter; continuing without node-exporter" >&2
+    if systemctl cat prometheus-node-exporter.service >/dev/null 2>&1; then
+        systemctl enable --now prometheus-node-exporter || echo "warning: failed to enable node-exporter, continuing" >&2
+    fi
+fi
+fi
 
 # 6b. Ensure the fluent-bit service user/group exist.
 #     The fluent-bit deb package does NOT create a service user (postinst only
@@ -120,6 +170,7 @@ install -d -o "$FLUENT_BIT_USER" -g "$FLUENT_BIT_GROUP" -m 0750 /var/lib/fluent-
 # 10. Add the fluent-bit user to the systemd-journal group (role task:
 #     "Add fluent-bit user to systemd-journal group").
 echo ">>> Adding ${FLUENT_BIT_USER} user to systemd-journal group..."
+getent group systemd-journal >/dev/null 2>&1 || { echo "group systemd-journal does not exist" >&2; exit 1; }
 usermod -aG systemd-journal "$FLUENT_BIT_USER"
 
 # 11. Enable and start the service (role task: "Enable and start fluent-bit service").
