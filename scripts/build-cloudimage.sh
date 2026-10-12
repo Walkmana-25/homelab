@@ -220,9 +220,10 @@ if [ "$DRY_RUN" -eq 1 ]; then
     echo "[dry-run] virt-resize --expand /dev/sda1 ${WORK_IMG} ${EXPANDED_IMG} && mv ${EXPANDED_IMG} ${WORK_IMG}"
 else
     log "Enlarging working copy by ${EXTRA_DISK_GB}G and expanding /dev/sda1..."
-    truncate -r "$WORK_IMG" "$EXPANDED_IMG" \
-        && truncate -s "+${EXTRA_DISK_GB}G" "$EXPANDED_IMG" \
-        || die "failed to pre-size expanded image"
+    if ! truncate -r "$WORK_IMG" "$EXPANDED_IMG" \
+        || ! truncate -s "+${EXTRA_DISK_GB}G" "$EXPANDED_IMG"; then
+        die "failed to pre-size expanded image"
+    fi
     virt-resize --expand /dev/sda1 "$WORK_IMG" "$EXPANDED_IMG" \
         || die "virt-resize --expand /dev/sda1 failed"
     mv "$EXPANDED_IMG" "$WORK_IMG"
