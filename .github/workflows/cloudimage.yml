@@ -13,9 +13,17 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned to 22.04 (not ubuntu-latest): libguestfs >= 1.52 on 24.04-based
+    # runners defaults to passt for usermode networking and fails with
+    # "passt exited with status 1" (24.04 ships an old/buggy passt and there
+    # is no env knob to force slirp back). 22.04 predates the passt switch.
+    # Revisit when GitHub deprecates the 22.04 image.
+    runs-on: ubuntu-22.04
     # Manual-only image build; cap runaway virt-customize/qemu-nbd hangs.
     timeout-minutes: 60
+    # Explicit direct backend (no libvirt daemon on hosted runners).
+    env:
+      LIBGUESTFS_BACKEND: direct
 
     steps:
       - uses: actions/checkout@v6.1.0
@@ -23,9 +31,9 @@ jobs:
           ref: ${{ github.event.inputs.ref || github.ref }}
 
       - name: Install dependencies
-        # NOTE: versions intentionally unpinned — ubuntu-latest is a rolling
-        # image and libguestfs/qemu/btrfs-progs have no stable versioned PPA
-        # here; pinning would rot. ShellCheck + --dry-run smoke the scripts
+        # NOTE: versions intentionally unpinned — the runner is pinned to
+        # ubuntu-22.04 (see above) and libguestfs/qemu/btrfs-progs have no
+        # stable versioned PPA here; pinning would rot. ShellCheck + --dry-run smoke the scripts
         # before the real build, and the base cloudimg is checksum-verified
         # (TLS + SHA256SUMS; no gpgv — see scripts/build-cloudimage.sh
         # "Supply-chain note" for the reasoned acceptance).
