@@ -88,11 +88,8 @@ spec:
           general_settings:
             master_key: os.environ/PROXY_MASTER_KEY
             store_model_in_db: true
-          litellm_settings:
-            drop_params: true
-          general_settings:
-            master_key: os.environ/PROXY_MASTER_KEY
-            store_model_in_db: true
+            # Enable the Chat UI (Admin UI -> Chat, /ui/chat)
+            enable_chat_ui: true
           litellm_settings:
             drop_params: true
 
