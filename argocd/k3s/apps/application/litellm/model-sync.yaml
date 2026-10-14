@@ -2,16 +2,22 @@
 # Keeps LiteLLM's model list in sync with the providers' /models endpoints.
 #
 # LiteLLM's built-in "model discovery" (wildcard model_list + check_provider_endpoint)
-# cannot discover z.ai / INIAD because it hardcodes <host>/v1/models and ignores the
-# api_base path (z.ai uses /api/coding/paas/v4/models, INIAD /api/v1/models). This
-# CronJob does the same job from outside: it fetches each provider's /models and
-# registers every model with the LiteLLM management API as <provider>/<model>, so the
-# models show up in /v1/models and the admin UI (persisted via store_model_in_db).
+# cannot discover z.ai / INIAD / OpenCode Go because it hardcodes <host>/v1/models and
+# ignores the api_base path (z.ai uses /api/coding/paas/v4/models, INIAD /api/v1/models,
+# OpenCode Go /inference/go/v1/models). This CronJob does the same job from outside: it
+# fetches each provider's /models and registers every model with the LiteLLM management
+# API as <provider>/<model>, so the models show up in /v1/models and the admin UI
+# (persisted via store_model_in_db).
 #
 # Each provider declares the LiteLLM model "mode". INIAD's OpenAI endpoint is called
 # through the Responses API (/api/v1/responses), so its models use mode "responses":
 # LiteLLM forwards /v1/responses straight to that endpoint and bridges
 # /v1/chat/completions to it as well. z.ai stays on the chat completions API.
+#
+# OpenCode Go is a multi-protocol gateway: some models speak the Responses API, some
+# only chat completions and a few only the Anthropic Messages API. Its mode is "auto",
+# so the protocol is probed per model (Responses API preferred) and every request is
+# tagged with a stable x-opencode-session header.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -32,8 +38,10 @@ data:
 
     # Each provider: the public model prefix, the LiteLLM adapter used to call it,
     # the api_base for chat, the /models listing URL (None when unsupported), the
-    # env var holding the API key and the LiteLLM model "mode" (chat completions vs
-    # the Responses API).
+    # env var holding the API key and the LiteLLM model "mode".
+    #
+    # "mode" is a fixed protocol ("chat" / "responses") or "auto": with "auto" the
+    # protocol is probed per model, preferring the Responses API (see deployment_for).
     PROVIDERS = [
         {
             "prefix": "zai",
@@ -62,6 +70,21 @@ data:
             "key_env": "INIAD_API_KEY",
             "mode": "chat",
         },
+        {
+            # OpenCode Go. Multi-protocol gateway, probed per model. Every request
+            # needs a stable x-opencode-session header (routing + prompt caching)
+            # and a non-SDK user agent (LiteLLM's own UA is accepted).
+            "prefix": "opencode-go",
+            "api_base": "https://opencode.ai/inference/go/v1",
+            "models_url": "https://opencode.ai/inference/go/v1/models",
+            "key_env": "OPENCODE_API_KEY",
+            "mode": "auto",
+            "session_header": "x-opencode-session",
+            "anthropic_api_base": "https://opencode.ai/inference/go",
+            # Cloudflare in front of the gateway rejects the stock Python urllib
+            # user agent, so identify as a coding agent.
+            "user_agent": "litellm-model-sync/1.0",
+        },
     ]
 
 
@@ -81,15 +104,69 @@ data:
         return json.loads(body) if body else {}
 
 
+    def auth_headers(provider):
+        headers = {"Authorization": "Bearer " + os.environ[provider["key_env"]]}
+        if provider.get("user_agent"):
+            headers["User-Agent"] = provider["user_agent"]
+        return headers
+
+
     def discover_models(provider):
         if not provider["models_url"]:
             return []
         request = urllib.request.Request(
             provider["models_url"],
-            headers={"Authorization": "Bearer " + os.environ[provider["key_env"]]},
+            headers=auth_headers(provider),
         )
         with urllib.request.urlopen(request, timeout=60) as response:
             return [m["id"] for m in json.loads(response.read().decode()).get("data", [])]
+
+
+    def provider_request(provider, path, payload, session):
+        """POST to a provider; True on success, False if the protocol is unsupported."""
+        request = urllib.request.Request(
+            provider["api_base"] + path,
+            data=json.dumps(payload).encode(),
+            method="POST",
+            headers={
+                **auth_headers(provider),
+                "Content-Type": "application/json",
+                provider["session_header"]: session,
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60):
+                return True
+        except urllib.error.HTTPError as error:
+            if "ModelProtocolUnsupported" in error.read().decode():
+                return False
+            raise
+
+
+    def deployment_for(provider, model_id, session):
+        """(litellm_model, api_base, mode) for one model, probing when mode is auto."""
+        mode = provider.get("mode", "chat")
+        if mode != "auto":
+            return f"{provider['provider']}/{model_id}", provider["api_base"], mode
+
+        # Prefer the Responses API, then chat completions, then Anthropic Messages.
+        if provider_request(
+            provider, "/responses",
+            {"model": model_id, "input": "ping", "max_output_tokens": 16}, session,
+        ):
+            return f"openai/{model_id}", provider["api_base"], "responses"
+        if provider_request(
+            provider, "/chat/completions",
+            {"model": model_id, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 16}, session,
+        ):
+            return f"openai/{model_id}", provider["api_base"], "chat"
+        anthropic = {**provider, "api_base": provider["anthropic_api_base"]}
+        if provider_request(
+            anthropic, "/v1/messages",
+            {"model": model_id, "max_tokens": 16, "messages": [{"role": "user", "content": "ping"}]}, session,
+        ):
+            return f"anthropic/{model_id}", provider["anthropic_api_base"], "chat"
+        raise RuntimeError("no supported protocol")
 
 
     def existing_models():
@@ -121,39 +198,56 @@ data:
             for model_id in model_ids:
                 name = f"{provider['prefix']}/{model_id}"
                 desired.add(name)
-                target_model = f"{provider['provider']}/{model_id}"
+                session = f"litellm-{provider['prefix']}-{model_id}"
                 current = existing.get(name)
-                if (
-                    current
-                    and current["id"] is not None
-                    and current["model"] == target_model
-                    and current["mode"] == mode
-                ):
-                    continue
-                # Recreate models whose stored definition drifted (e.g. the provider
-                # moved from chat completions to the Responses API). /model/update
-                # cannot change model_info.mode, so delete + add is the reliable path.
+
+                skip = False
                 if current and current["id"] is not None:
-                    try:
-                        proxy_request("/model/delete", "POST", {"id": current["id"]})
-                    except urllib.error.HTTPError as error:
-                        print(f"  ! delete {name}: {error.code} {error.read().decode()[:160]}", flush=True)
-                        continue
+                    if mode == "auto":
+                        # The protocol is probed on creation; an existing
+                        # deployment is trusted as-is.
+                        skip = True
+                    elif (
+                        current["model"] == f"{provider['provider']}/{model_id}"
+                        and current["mode"] == mode
+                    ):
+                        skip = True
+                    else:
+                        # Recreate on drift (e.g. the provider moved from chat
+                        # completions to the Responses API). /model/update cannot
+                        # change model_info.mode, so delete + add is the reliable path.
+                        try:
+                            proxy_request("/model/delete", "POST", {"id": current["id"]})
+                        except urllib.error.HTTPError as error:
+                            print(f"  ! delete {name}: {error.code} {error.read().decode()[:160]}", flush=True)
+                            continue
+                if skip:
+                    continue
+
+                try:
+                    litellm_model, api_base, effective_mode = deployment_for(provider, model_id, session)
+                except Exception as error:  # noqa: BLE001
+                    print(f"  ! {name}: {error}", flush=True)
+                    continue
+
+                litellm_params = {
+                    "model": litellm_model,
+                    "api_base": api_base,
+                    "api_key": "os.environ/" + provider["key_env"],
+                }
+                if provider.get("session_header"):
+                    litellm_params["extra_headers"] = {provider["session_header"]: session}
                 try:
                     proxy_request(
                         "/model/new",
                         "POST",
                         {
                             "model_name": name,
-                            "litellm_params": {
-                                "model": target_model,
-                                "api_base": provider["api_base"],
-                                "api_key": "os.environ/" + provider["key_env"],
-                            },
-                            "model_info": {"mode": mode},
+                            "litellm_params": litellm_params,
+                            "model_info": {"mode": effective_mode},
                         },
                     )
-                    print(f"  + {name}", flush=True)
+                    print(f"  + {name} [{effective_mode}]", flush=True)
                 except urllib.error.HTTPError as error:
                     print(f"  ! {name}: {error.code} {error.read().decode()[:160]}", flush=True)
 
@@ -216,6 +310,11 @@ spec:
                     secretKeyRef:
                       name: litellm-env
                       key: INIAD_API_KEY
+                - name: OPENCODE_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: litellm-env
+                      key: OPENCODE_API_KEY
               volumeMounts:
                 - name: scripts
                   mountPath: /scripts
