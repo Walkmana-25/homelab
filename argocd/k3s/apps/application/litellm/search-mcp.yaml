@@ -1,0 +1,49 @@
+---
+# Minimal OpenAPI spec for the proxy's own web search, mounted into the pod and
+# registered by mcp_servers.litellm_search (see application.yaml). LiteLLM turns
+# each operation into an MCP tool on /mcp so an MCP client can run the search
+# itself - the one path that gives chat-only OpenCode Go models web search.
+#
+# Why a hand-written spec instead of the proxy's /openapi.json: LiteLLM declares
+# /v1/search's body as a bare dict, so FastAPI emits no requestBody schema and
+# the generated MCP tool has no query argument. /v1/search/web_search is used
+# directly so the router load-balances across the search_tools entries.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-search-mcp
+  namespace: litellm
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+data:
+  openapi.json: |
+    {
+      "openapi": "3.0.0",
+      "info": {"title": "litellm-search", "version": "1.0.0"},
+      "servers": [{"url": "http://litellm.litellm.svc.cluster.local:4000"}],
+      "paths": {
+        "/v1/search/web_search": {
+          "post": {
+            "operationId": "web_search",
+            "summary": "Search the web",
+            "description": "Search the web. Results come from LiteLLM's search_tools, load-balanced across Tavily, Exa and the self-hosted Firecrawl.",
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "query": {"type": "string", "description": "The web search query"}
+                    },
+                    "required": ["query"]
+                  }
+                }
+              }
+            },
+            "responses": {"200": {"description": "Search results"}}
+          }
+        }
+      }
+    }

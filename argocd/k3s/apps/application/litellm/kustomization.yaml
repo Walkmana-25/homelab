@@ -5,6 +5,7 @@ resources:
   - namespace.yaml
   - credentials.yaml
   - callbacks.yaml
+  - search-mcp.yaml
   - model-sync.yaml
   - postgres.yaml
   - application.yaml

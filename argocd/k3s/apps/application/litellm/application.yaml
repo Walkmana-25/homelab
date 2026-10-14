@@ -54,13 +54,22 @@ spec:
         # Pre-call hook (see callbacks.yaml) that supplies a fallback
         # x-opencode-session when the client did not send one. Mounted next to
         # the config file so litellm_settings.callbacks can resolve it.
+        #
+        # The search-mcp volume carries a hand-written OpenAPI spec (see
+        # search-mcp.yaml) that mcp_servers.litellm_search turns into an MCP
+        # web_search tool; see the web search note under litellm_settings.
         volumes:
           - name: callbacks
             configMap:
               name: litellm-callbacks
+          - name: search-mcp
+            configMap:
+              name: litellm-search-mcp
         volumeMounts:
           - name: callbacks
             mountPath: /etc/litellm/callbacks
+          - name: search-mcp
+            mountPath: /etc/litellm/search-mcp
 
         # ── Resources ──────────────────────────────────────────
         resources:
@@ -213,6 +222,17 @@ spec:
             # Use a Responses-native model (deepseek-*, grok-*, gpt-*-luna) when
             # web search is needed.
             #
+            # ── Web search over MCP ────────────────────────────────
+            # The search_tools above are also exposed as an MCP tool on /mcp
+            # (see mcp_servers.litellm_search and the search-mcp volume), so a
+            # client that speaks MCP can run the search itself. That is the one
+            # way to give a chat-only OpenCode Go model web search without the
+            # streaming problem above: the model never needs a server-side tool.
+            # user_url_allowed_hosts is required because the server is
+            # OpenAPI-registered and calls the proxy's own service, which
+            # LiteLLM's SSRF guard blocks by default.
+            user_url_allowed_hosts:
+              - litellm.litellm.svc.cluster.local
             # Pre-call hook that adds a fallback x-opencode-session when the
             # client did not send one (see callbacks.yaml).
             callbacks:
@@ -224,6 +244,25 @@ spec:
             model_group_settings:
               forward_client_headers_to_llm_api:
                 - opencode-go/*
+          # ── MCP gateway: web search ────────────────────────────
+          # Register the proxy's own /v1/search as an MCP tool, so MCP clients
+          # (e.g. the Codex app) can run the query themselves and every model
+          # gets web search regardless of its protocol. Clients connect to
+          # https://litellm.lapis-dev.work/mcp and call the tool named
+          # litellm_search-web_search with {"body": {"query": "..."}}.
+          #
+          # The OpenAPI spec is hand-written (search-mcp.yaml) because LiteLLM's
+          # own /openapi.json does not publish /v1/search's requestBody, so
+          # pointing spec_path at it yields a tool with no query argument.
+          # auth_type bearer_token reuses the master key so the generated tool
+          # can call the proxy; nothing secret is stored inline.
+          mcp_servers:
+            litellm_search:
+              transport: http
+              spec_path: /etc/litellm/search-mcp/openapi.json
+              auth_type: bearer_token
+              auth_value: os.environ/PROXY_MASTER_KEY
+              description: "LiteLLM web search (Tavily/Exa/Firecrawl, load-balanced)"
 
   destination:
     server: https://kubernetes.default.svc
