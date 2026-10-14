@@ -105,6 +105,23 @@ spec:
         # the admin/master key even with model_info.discoverable=false.
         proxy_config:
           model_list: []
+          # ── Web search (self-hosted) ───────────────────────────
+          # Register the in-cluster search backends as LiteLLM search tools
+          # (Perplexity-compatible API). Call them as:
+          #   POST /v1/search/searxng    or    /v1/search/firecrawl
+          #   POST /v1/search  with {"search_tool_name": "..."}
+          search_tools:
+            - search_tool_name: searxng
+              litellm_params:
+                search_provider: searxng
+                api_base: http://searxng.searxng.svc.cluster.local:8080
+            - search_tool_name: firecrawl
+              litellm_params:
+                search_provider: firecrawl
+                # Firecrawl runs with USE_DB_AUTHENTICATION=false, so the key
+                # is never verified - but LiteLLM refuses requests without one.
+                api_base: http://api.firecrawl.svc.cluster.local:3002/v2
+                api_key: self-hosted
           general_settings:
             master_key: os.environ/PROXY_MASTER_KEY
             store_model_in_db: true
