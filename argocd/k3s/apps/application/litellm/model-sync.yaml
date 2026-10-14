@@ -98,7 +98,8 @@ data:
             # client's own (see model_group_settings in application.yaml), so no
             # static extra_headers are set here - extra_headers would shadow the
             # forwarded client value. sync_version forces a recreate whenever the
-            # deployment shape changes.
+            # deployment shape changes (v3: Responses models carry the
+            # "responses/" prefix so chat requests bridge to /responses).
             "prefix": "opencode-go",
             "api_base": "https://opencode.ai/inference/go/v1",
             "models_url": "https://opencode.ai/inference/go/v1/models",
@@ -110,7 +111,7 @@ data:
             # Cloudflare in front of the gateway rejects the stock Python urllib
             # user agent, so identify as a coding agent.
             "user_agent": "litellm-model-sync/1.0",
-            "sync_version": 2,
+            "sync_version": 3,
         },
     ]
 
@@ -173,37 +174,54 @@ data:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=60):
-                return True
+            with urllib.request.urlopen(request, timeout=60) as response:
+                body = response.read().decode(errors="replace")
         except urllib.error.HTTPError as error:
             if "ModelProtocolUnsupported" in error.read().decode():
                 return False
             raise
+        # Some gateways answer 200 with a protocol-unsupported error body.
+        return "ModelProtocolUnsupported" not in body
+
+
+    def litellm_model_name(provider_name, model_id, mode):
+        """LiteLLM model string for one deployment.
+
+        Responses-API deployments carry an explicit "responses/" segment. LiteLLM
+        selects the /chat/completions -> /responses bridge from the model name
+        (its cost-map entry, or that prefix), never from model_info.mode. A custom
+        id such as gpt-6-luna has no cost-map entry, so without the prefix chat
+        requests are sent to /chat/completions and the gateway rejects them with
+        "Model does not support this protocol".
+        """
+        if mode == "responses":
+            return f"{provider_name}/responses/{model_id}"
+        return f"{provider_name}/{model_id}"
 
 
     def deployment_for(provider, model_id, session):
         """(litellm_model, api_base, mode) for one model, probing when mode is auto."""
         mode = provider.get("mode", "chat")
         if mode != "auto":
-            return f"{provider['provider']}/{model_id}", provider["api_base"], mode
+            return litellm_model_name(provider["provider"], model_id, mode), provider["api_base"], mode
 
         # Prefer the Responses API, then chat completions, then Anthropic Messages.
         if provider_request(
             provider, "/responses",
             {"model": model_id, "input": "ping", "max_output_tokens": 16}, session,
         ):
-            return f"openai/{model_id}", provider["api_base"], "responses"
+            return litellm_model_name("openai", model_id, "responses"), provider["api_base"], "responses"
         if provider_request(
             provider, "/chat/completions",
             {"model": model_id, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 16}, session,
         ):
-            return f"openai/{model_id}", provider["api_base"], "chat"
+            return litellm_model_name("openai", model_id, "chat"), provider["api_base"], "chat"
         anthropic = {**provider, "api_base": provider["anthropic_api_base"]}
         if provider_request(
             anthropic, "/v1/messages",
             {"model": model_id, "max_tokens": 16, "messages": [{"role": "user", "content": "ping"}]}, session,
         ):
-            return f"anthropic/{model_id}", provider["anthropic_api_base"], "chat"
+            return litellm_model_name("anthropic", model_id, "chat"), provider["anthropic_api_base"], "chat"
         raise RuntimeError("no supported protocol")
 
 
@@ -371,7 +389,7 @@ data:
                     if sync_version is not None and current["sync_version"] != sync_version:
                         recreate = True
                     elif mode != "auto" and (
-                        current["model"] != f"{provider['provider']}/{model_id}"
+                        current["model"] != litellm_model_name(provider["provider"], model_id, mode)
                         or current["mode"] != mode
                     ):
                         # A fixed-mode provider moved between adapters/protocols.
