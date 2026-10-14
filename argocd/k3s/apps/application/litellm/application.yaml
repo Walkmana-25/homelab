@@ -73,13 +73,13 @@ spec:
           enabled: false
 
         # ── LiteLLM proxy config ───────────────────────────────
-        # Provider credentials (ZAI_API_KEY, INIAD_API_KEY, INIAD_BASE_URL,
-        # INIAD_CLAUDE_URL) come from the litellm-env SealedSecret.
+        # API keys come from the litellm-env SealedSecret.
         #
-        # Wildcard model entries + litellm_settings.check_provider_endpoint
-        # make the proxy auto-discover each provider's models from its
-        # /models endpoint, so /v1/models lists them as <provider>/<model>
-        # (e.g. zai/glm-4.5-air, iniad/gpt-5.4-mini).
+        # Wildcard entries make every model under a provider callable by name as
+        # <provider>/<model>. The concrete model list shown in /v1/models and the
+        # admin UI is populated automatically by the litellm-model-sync CronJob
+        # (see model-sync.yaml), because LiteLLM's built-in discovery cannot
+        # follow these providers' custom /models paths.
         proxy_config:
           model_list:
             # z.ai (OpenAI-compatible)
@@ -92,21 +92,19 @@ spec:
             - model_name: "iniad/*"
               litellm_params:
                 model: "openai/*"
-                api_base: os.environ/INIAD_BASE_URL
+                api_base: "https://api.openai.iniad.org/api/v1"
                 api_key: os.environ/INIAD_API_KEY
-            # INIAD Claude (Anthropic-native; its gateway has no /models
-            # endpoint, so models are not auto-listed but remain callable as
-            # iniad-claude/<model>)
+            # INIAD Claude (Anthropic-native; api_base must omit /v1 because
+            # LiteLLM appends /v1/messages)
             - model_name: "iniad-claude/*"
               litellm_params:
                 model: "anthropic/*"
-                api_base: os.environ/INIAD_CLAUDE_URL
+                api_base: "https://api.anthropic.iniad.org/api"
                 api_key: os.environ/INIAD_API_KEY
           general_settings:
             master_key: os.environ/PROXY_MASTER_KEY
             store_model_in_db: true
           litellm_settings:
-            check_provider_endpoint: true
             drop_params: true
 
   destination:

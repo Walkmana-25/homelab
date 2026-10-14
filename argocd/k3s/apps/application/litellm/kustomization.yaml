@@ -4,5 +4,6 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - credentials.yaml
+  - model-sync.yaml
   - postgres.yaml
   - application.yaml

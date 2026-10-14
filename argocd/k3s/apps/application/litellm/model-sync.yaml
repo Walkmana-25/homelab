@@ -1,0 +1,197 @@
+---
+# Keeps LiteLLM's model list in sync with the providers' /models endpoints.
+#
+# LiteLLM's built-in "model discovery" (wildcard model_list + check_provider_endpoint)
+# cannot discover z.ai / INIAD because it hardcodes <host>/v1/models and ignores the
+# api_base path (z.ai uses /api/coding/paas/v4/models, INIAD /api/v1/models). This
+# CronJob does the same job from outside: it fetches each provider's /models and
+# registers every model with the LiteLLM management API as <provider>/<model>, so the
+# models show up in /v1/models and the admin UI (persisted via store_model_in_db).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-model-sync
+  namespace: litellm
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+data:
+  sync.py: |
+    import json
+    import os
+    import urllib.error
+    import urllib.request
+
+    PROXY = os.environ.get("LITELLM_URL", "http://litellm:4000")
+    MASTER_KEY = os.environ["LITELLM_MASTER_KEY"]
+
+    # Each provider: the public model prefix, the LiteLLM adapter used to call it,
+    # the api_base for chat, the /models listing URL (None when unsupported) and the
+    # env var holding the API key.
+    PROVIDERS = [
+        {
+            "prefix": "zai",
+            "provider": "openai",
+            "api_base": "https://api.z.ai/api/coding/paas/v4",
+            "models_url": "https://api.z.ai/api/coding/paas/v4/models",
+            "key_env": "ZAI_API_KEY",
+        },
+        {
+            "prefix": "iniad",
+            "provider": "openai",
+            "api_base": "https://api.openai.iniad.org/api/v1",
+            "models_url": "https://api.openai.iniad.org/api/v1/models",
+            "key_env": "INIAD_API_KEY",
+        },
+        {
+            # INIAD Claude is Anthropic-native and has no /models endpoint, so its
+            # models are not listed here; call them as iniad-claude/<model>.
+            "prefix": "iniad-claude",
+            "provider": "anthropic",
+            "api_base": "https://api.anthropic.iniad.org/api",
+            "models_url": None,
+            "key_env": "INIAD_API_KEY",
+        },
+    ]
+
+
+    def proxy_request(path, method="GET", payload=None):
+        data = json.dumps(payload).encode() if payload is not None else None
+        request = urllib.request.Request(
+            PROXY + path,
+            data=data,
+            method=method,
+            headers={
+                "Authorization": "Bearer " + MASTER_KEY,
+                "Content-Type": "application/json",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=60) as response:
+            body = response.read().decode()
+        return json.loads(body) if body else {}
+
+
+    def discover_models(provider):
+        if not provider["models_url"]:
+            return []
+        request = urllib.request.Request(
+            provider["models_url"],
+            headers={"Authorization": "Bearer " + os.environ[provider["key_env"]]},
+        )
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return [m["id"] for m in json.loads(response.read().decode()).get("data", [])]
+
+
+    def existing_models():
+        data = proxy_request("/model/info").get("data", [])
+        return {m["model_name"]: m.get("model_info", {}).get("id") for m in data}
+
+
+    def main():
+        existing = existing_models()
+        prefixes = {p["prefix"] for p in PROVIDERS}
+        desired = set()
+
+        for provider in PROVIDERS:
+            try:
+                model_ids = discover_models(provider)
+            except Exception as error:  # noqa: BLE001
+                print(f"[{provider['prefix']}] discovery failed: {error}", flush=True)
+                continue
+            print(f"[{provider['prefix']}] discovered {len(model_ids)} models", flush=True)
+            for model_id in model_ids:
+                name = f"{provider['prefix']}/{model_id}"
+                desired.add(name)
+                if name in existing:
+                    continue
+                try:
+                    proxy_request(
+                        "/model/new",
+                        "POST",
+                        {
+                            "model_name": name,
+                            "litellm_params": {
+                                "model": f"{provider['provider']}/{model_id}",
+                                "api_base": provider["api_base"],
+                                "api_key": "os.environ/" + provider["key_env"],
+                            },
+                            "model_info": {"mode": "chat"},
+                        },
+                    )
+                    print(f"  + {name}", flush=True)
+                except urllib.error.HTTPError as error:
+                    print(f"  ! {name}: {error.code} {error.read().decode()[:160]}", flush=True)
+
+        # Drop models this job added previously that the provider no longer lists.
+        # Wildcard config entries ("*") and unrelated models are left untouched.
+        for name, model_id in existing.items():
+            if "*" in name or "/" not in name or model_id is None:
+                continue
+            if name.split("/", 1)[0] in prefixes and name not in desired:
+                try:
+                    proxy_request("/model/delete", "POST", {"id": model_id})
+                    print(f"  - {name}", flush=True)
+                except urllib.error.HTTPError as error:
+                    print(f"  ! delete {name}: {error.code} {error.read().decode()[:160]}", flush=True)
+
+
+    if __name__ == "__main__":
+        main()
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: litellm-model-sync
+  namespace: litellm
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: sync
+              image: python:3.13-alpine
+              command: ["python3", "/scripts/sync.py"]
+              env:
+                - name: LITELLM_URL
+                  value: "http://litellm:4000"
+                - name: LITELLM_MASTER_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: litellm-masterkey
+                      key: masterkey
+                - name: ZAI_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: litellm-env
+                      key: ZAI_API_KEY
+                - name: INIAD_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: litellm-env
+                      key: INIAD_API_KEY
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi
+          volumes:
+            - name: scripts
+              configMap:
+                name: litellm-model-sync
