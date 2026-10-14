@@ -13,9 +13,10 @@
 # only knows public model names, so gateway-specific ids (glm-4.6, deepseek-v4.1-flash,
 # kimi-k3, ...) would otherwise be billed at $0. Instead the job pulls per-model
 # pricing from models.dev (USD per 1M tokens) and writes it into the deployment's
-# model_info as LiteLLM's per-token fields. A small explicit override table
-# (/scripts/costs.json) wins over models.dev and fills the gaps it does not cover.
-# INIAD is left unpriced (its endpoint is not in models.dev).
+# litellm_params as LiteLLM's per-token fields (/model/info drops pricing sent via
+# model_info, so litellm_params is the field that persists). A small explicit
+# override table (/scripts/costs.json) wins over models.dev and fills the gaps it
+# does not cover. INIAD is left unpriced (its endpoint is not in models.dev).
 #
 # Each provider declares the LiteLLM model "mode". INIAD's OpenAI endpoint is called
 # through the Responses API (/api/v1/responses), so its models use mode "responses":
@@ -293,14 +294,17 @@ data:
         result = {}
         for model in proxy_request("/model/info").get("data", []):
             info = model.get("model_info") or {}
+            params = model.get("litellm_params") or {}
+            # Pricing set via /model/new lands in litellm_params and is echoed
+            # into model_info; read both so either shape is detected.
             cost = {}
-            for source in (info, model):
+            for source in (info, model, params):
                 for key in COST_SIGNATURE:
                     if source.get(key) is not None:
                         cost[key] = source[key]
             result[model["model_name"]] = {
                 "id": info.get("id"),
-                "model": (model.get("litellm_params") or {}).get("model"),
+                "model": params.get("model"),
                 "mode": info.get("mode"),
                 "sync_version": info.get("sync_version"),
                 "cost": cost,
@@ -352,6 +356,16 @@ data:
                         # Already current: an "auto" deployment keeps its probed
                         # protocol, matching ones are left untouched.
                         continue
+
+                # Resolve the protocol before touching an existing deployment, so a
+                # provider that no longer answers a probe leaves the old one intact.
+                try:
+                    litellm_model, api_base, effective_mode = deployment_for(provider, model_id, session)
+                except Exception as error:  # noqa: BLE001
+                    print(f"  ! {name}: {error}", flush=True)
+                    continue
+
+                if recreate:
                     # /model/update cannot change model_info, so delete + add is
                     # the reliable path for any drift.
                     try:
@@ -360,15 +374,20 @@ data:
                         print(f"  ! delete {name}: {error.code} {error.read().decode()[:160]}", flush=True)
                         continue
 
-                try:
-                    litellm_model, api_base, effective_mode = deployment_for(provider, model_id, session)
-                except Exception as error:  # noqa: BLE001
-                    print(f"  ! {name}: {error}", flush=True)
-                    continue
-
+                # Pricing persists on litellm_params; /model/info drops it from
+                # model_info. base_model stays on model_info (it is a lookup key,
+                # not a cost value).
+                litellm_params = {
+                    "model": litellm_model,
+                    "api_base": api_base,
+                    "api_key": "os.environ/" + provider["key_env"],
+                }
                 model_info = {"mode": effective_mode}
-                if cost:
-                    model_info.update(cost)
+                for key, value in (cost or {}).items():
+                    if key == "base_model":
+                        model_info[key] = value
+                    else:
+                        litellm_params[key] = value
                 if sync_version is not None:
                     model_info["sync_version"] = sync_version
                 try:
@@ -377,11 +396,7 @@ data:
                         "POST",
                         {
                             "model_name": name,
-                            "litellm_params": {
-                                "model": litellm_model,
-                                "api_base": api_base,
-                                "api_key": "os.environ/" + provider["key_env"],
-                            },
+                            "litellm_params": litellm_params,
                             "model_info": model_info,
                         },
                     )
