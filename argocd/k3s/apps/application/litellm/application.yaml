@@ -97,6 +97,13 @@ spec:
             enable_chat_ui: true
           litellm_settings:
             drop_params: true
+            # Forward the client's x-* headers (notably x-opencode-session) to
+            # OpenCode Go only, so per-conversation sessions pass through instead
+            # of the proxy's static session. Scoped so z.ai / INIAD never receive
+            # client headers.
+            model_group_settings:
+              forward_client_headers_to_llm_api:
+                - opencode-go/*
           # ── MCP gateway ────────────────────────────────────────
           # Expose the homelab MCP servers (aggregated by the mcp-proxy in the
           # mcp-proxy namespace) through LiteLLM's MCP gateway. The proxy's nginx

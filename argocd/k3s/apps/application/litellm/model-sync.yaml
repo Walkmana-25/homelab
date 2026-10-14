@@ -16,8 +16,9 @@
 #
 # OpenCode Go is a multi-protocol gateway: some models speak the Responses API, some
 # only chat completions and a few only the Anthropic Messages API. Its mode is "auto",
-# so the protocol is probed per model (Responses API preferred) and every request is
-# tagged with a stable x-opencode-session header.
+# so the protocol is probed per model (Responses API preferred). The gateway requires
+# an x-opencode-session header; the proxy forwards the client's own (see
+# model_group_settings in application.yaml) rather than pinning a static one.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -71,9 +72,12 @@ data:
             "mode": "chat",
         },
         {
-            # OpenCode Go. Multi-protocol gateway, probed per model. Every request
-            # needs a stable x-opencode-session header (routing + prompt caching)
-            # and a non-SDK user agent (LiteLLM's own UA is accepted).
+            # OpenCode Go. Multi-protocol gateway, probed per model. The gateway
+            # requires an x-opencode-session header; the proxy forwards the
+            # client's own (see model_group_settings in application.yaml), so no
+            # static extra_headers are set here - extra_headers would shadow the
+            # forwarded client value. sync_version forces a recreate whenever the
+            # deployment shape changes.
             "prefix": "opencode-go",
             "api_base": "https://opencode.ai/inference/go/v1",
             "models_url": "https://opencode.ai/inference/go/v1/models",
@@ -84,6 +88,7 @@ data:
             # Cloudflare in front of the gateway rejects the stock Python urllib
             # user agent, so identify as a coding agent.
             "user_agent": "litellm-model-sync/1.0",
+            "sync_version": 2,
         },
     ]
 
@@ -170,7 +175,7 @@ data:
 
 
     def existing_models():
-        """model_name -> {"id", "model", "mode"} for drift detection."""
+        """model_name -> {"id", "model", "mode", "sync_version"} for drift detection."""
         result = {}
         for model in proxy_request("/model/info").get("data", []):
             info = model.get("model_info") or {}
@@ -178,6 +183,7 @@ data:
                 "id": info.get("id"),
                 "model": (model.get("litellm_params") or {}).get("model"),
                 "mode": info.get("mode"),
+                "sync_version": info.get("sync_version"),
             }
         return result
 
@@ -195,34 +201,37 @@ data:
                 continue
             print(f"[{provider['prefix']}] discovered {len(model_ids)} models", flush=True)
             mode = provider.get("mode", "chat")
+            sync_version = provider.get("sync_version")
             for model_id in model_ids:
                 name = f"{provider['prefix']}/{model_id}"
                 desired.add(name)
                 session = f"litellm-{provider['prefix']}-{model_id}"
                 current = existing.get(name)
 
-                skip = False
+                recreate = False
                 if current and current["id"] is not None:
-                    if mode == "auto":
+                    if sync_version is not None and current["sync_version"] != sync_version:
+                        recreate = True
+                    elif mode == "auto":
                         # The protocol is probed on creation; an existing
                         # deployment is trusted as-is.
-                        skip = True
+                        continue
                     elif (
                         current["model"] == f"{provider['provider']}/{model_id}"
                         and current["mode"] == mode
                     ):
-                        skip = True
+                        continue
                     else:
-                        # Recreate on drift (e.g. the provider moved from chat
-                        # completions to the Responses API). /model/update cannot
-                        # change model_info.mode, so delete + add is the reliable path.
-                        try:
-                            proxy_request("/model/delete", "POST", {"id": current["id"]})
-                        except urllib.error.HTTPError as error:
-                            print(f"  ! delete {name}: {error.code} {error.read().decode()[:160]}", flush=True)
-                            continue
-                if skip:
-                    continue
+                        recreate = True
+                if recreate:
+                    # Recreate on drift (the provider moved between protocols, or
+                    # the deployment shape changed). /model/update cannot change
+                    # model_info, so delete + add is the reliable path.
+                    try:
+                        proxy_request("/model/delete", "POST", {"id": current["id"]})
+                    except urllib.error.HTTPError as error:
+                        print(f"  ! delete {name}: {error.code} {error.read().decode()[:160]}", flush=True)
+                        continue
 
                 try:
                     litellm_model, api_base, effective_mode = deployment_for(provider, model_id, session)
@@ -230,21 +239,21 @@ data:
                     print(f"  ! {name}: {error}", flush=True)
                     continue
 
-                litellm_params = {
-                    "model": litellm_model,
-                    "api_base": api_base,
-                    "api_key": "os.environ/" + provider["key_env"],
-                }
-                if provider.get("session_header"):
-                    litellm_params["extra_headers"] = {provider["session_header"]: session}
+                model_info = {"mode": effective_mode}
+                if sync_version is not None:
+                    model_info["sync_version"] = sync_version
                 try:
                     proxy_request(
                         "/model/new",
                         "POST",
                         {
                             "model_name": name,
-                            "litellm_params": litellm_params,
-                            "model_info": {"mode": effective_mode},
+                            "litellm_params": {
+                                "model": litellm_model,
+                                "api_base": api_base,
+                                "api_key": "os.environ/" + provider["key_env"],
+                            },
+                            "model_info": model_info,
                         },
                     )
                     print(f"  + {name} [{effective_mode}]", flush=True)
