@@ -36,6 +36,7 @@ spec:
         masterkeySecretKey: masterkey
         environmentSecrets:
           - litellm-env
+          - litellm-mcp
 
         # ── Resources ──────────────────────────────────────────
         resources:
@@ -92,6 +93,18 @@ spec:
             enable_chat_ui: true
           litellm_settings:
             drop_params: true
+          # ── MCP gateway ────────────────────────────────────────
+          # Expose the homelab MCP servers (aggregated by the mcp-proxy in the
+          # mcp-proxy namespace) through LiteLLM's MCP gateway. The proxy's nginx
+          # sidecar requires a bearer token (MCP_PROXY_TOKEN, sealed secret
+          # litellm-mcp) and strips it before forwarding upstream.
+          mcp_servers:
+            mcps:
+              url: "http://mcp-proxy.mcp-proxy.svc.cluster.local:9090/mcp"
+              transport: "http"
+              auth_type: "bearer_token"
+              auth_value: os.environ/MCP_PROXY_TOKEN
+              description: "Homelab MCP proxy (deepwiki, searxng, firecrawl, context7)"
 
   destination:
     server: https://kubernetes.default.svc
