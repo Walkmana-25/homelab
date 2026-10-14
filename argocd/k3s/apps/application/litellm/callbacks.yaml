@@ -1,14 +1,10 @@
 ---
-# Custom LiteLLM callback: fallback x-opencode-session for OpenCode Go.
+# Custom LiteLLM callbacks, loaded via litellm_settings.callbacks in
+# application.yaml, which resolves "callbacks.<module>.<handler>" against the
+# config file's directory (/etc/litellm/config.yaml -> /etc/litellm/callbacks/).
 #
-# The proxy forwards the client's own x-opencode-session (see model_group_settings
-# in application.yaml), but OpenCode Go rejects any request without that header.
-# This pre-call hook adds a fallback session only when the client did not send one,
-# so real per-conversation sessions still pass through untouched.
-#
-# Loaded via litellm_settings.callbacks in application.yaml, which resolves
-# "callbacks.opencode_session.opencode_session_handler" against the config file's
-# directory (/etc/litellm/config.yaml -> /etc/litellm/callbacks/opencode_session.py).
+# - opencode_session.py: fallback x-opencode-session for OpenCode Go.
+# - compact_search.py: bound the payload of provider-hosted search results.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -18,6 +14,40 @@ metadata:
     app.kubernetes.io/managed-by: argocd
     app.kubernetes.io/part-of: application
 data:
+  compact_search.py: |
+    from litellm.integrations.custom_logger import CustomLogger
+
+    # Characters of page text kept per search result. LiteLLM asks the search
+    # providers for full content by default, which for a five-result search can
+    # reach hundreds of KB and floods the caller's context.
+    BOUNDED_TEXT_CHARS = 800
+
+
+    class CompactSearchParams(CustomLogger):
+        """Bound the payload of /v1/search responses.
+
+        LiteLLM's firecrawl search requests full-page markdown and its exa
+        search requests full page text unless the request says otherwise, so a
+        single search response can reach hundreds of KB. This pre-call hook
+        injects bounded defaults when the caller did not ask for more; a caller
+        that passes its own scrapeOptions/contents keeps them.
+
+        scrapeOptions is accepted (and ignored) by every provider we register;
+        contents is not - firecrawl rejects unknown keys with HTTP 400 - so
+        contents must only be used while firecrawl is absent from the
+        web_search load balancer (see search_tools in application.yaml).
+        """
+
+        async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
+            if call_type not in ("search", "asearch") or not isinstance(data, dict):
+                return data
+            data.setdefault("scrapeOptions", {"formats": []})
+            data.setdefault("contents", {"text": {"maxCharacters": BOUNDED_TEXT_CHARS}})
+            data.setdefault("max_results", 5)
+            return data
+
+
+    compact_search_handler = CompactSearchParams()
   opencode_session.py: |
     from litellm.integrations.custom_logger import CustomLogger
 
