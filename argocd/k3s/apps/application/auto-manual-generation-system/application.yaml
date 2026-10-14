@@ -27,6 +27,14 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
+  # The API server defaults StatefulSet volumeClaimTemplates
+  # (apiVersion/kind/volumeMode/status), which would otherwise leave the app
+  # permanently OutOfSync.
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/volumeClaimTemplates
   source:
     repoURL: git@github.com:Walkmana-25/auto-manual-generation-system.git
     path: deploy/kubernetes/auto-manual-generation-system
