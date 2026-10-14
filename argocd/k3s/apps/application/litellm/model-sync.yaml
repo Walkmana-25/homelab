@@ -100,6 +100,13 @@ data:
             # forwarded client value. sync_version forces a recreate whenever the
             # deployment shape changes (v3: Responses models carry the
             # "responses/" prefix so chat requests bridge to /responses).
+            #
+            # The probed protocol also decides web search: a client's hosted
+            # Responses web_search tool reaches the upstream only for the
+            # models that probe as "responses" here; chat-only models are
+            # bridged, which downgrades the tool to the ignored chat
+            # web_search_options param. See the web search note in
+            # application.yaml before changing this.
             "prefix": "opencode-go",
             "api_base": "https://opencode.ai/inference/go/v1",
             "models_url": "https://opencode.ai/inference/go/v1/models",

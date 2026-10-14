@@ -172,6 +172,35 @@ spec:
             enable_chat_ui: true
           litellm_settings:
             drop_params: true
+            # ── Web search: provider-hosted only ───────────────────
+            # Clients (Codex-class apps) send the Responses hosted tool
+            # {"type": "web_search"}. It is executed by the UPSTREAM, so it only
+            # works for deployments that speak the Responses API end to end:
+            # every INIAD and z.ai model, and the Responses-native OpenCode Go
+            # models (deepseek-*, grok-*, gpt-*-luna).
+            #
+            # OpenCode Go chat-only models (kimi-*, mimo-*, glm-*, qwen-*,
+            # minimax-m2.5/m3, ...) are registered with use_chat_completions_api
+            # (see model-sync.yaml), so /v1/responses is bridged to their
+            # /chat/completions upstream. LiteLLM rewrites the hosted tool into
+            # the chat web_search_options param, which the OpenCode Go chat
+            # endpoint accepts but ignores - those models cannot search.
+            #
+            # LiteLLM's server-side replacement (litellm_settings.callbacks:
+            # websearch_interception + websearch_interception_params, removed in
+            # history) must NOT be re-enabled: it works for non-streaming, but a
+            # stream=true /v1/responses request on a bridged model is flipped to
+            # non-streaming for the agentic loop and the SSE stream is never
+            # rebuilt, so every such request fails with HTTP 500
+            # ("'ResponsesAPIResponse' object has no attribute '__aiter__'" -
+            # LiteLLM 1.105.x, documented in the integration's ARCHITECTURE.md
+            # as a limitation of the /v1/responses surface). Streaming clients
+            # like the Codex app send stream=true and always carry the web_search
+            # tool, so enabling it would break them; it would also replace
+            # INIAD's native OpenAI web search with the proxy search_tools above.
+            # Use a Responses-native model (deepseek-*, grok-*, gpt-*-luna) when
+            # web search is needed.
+            #
             # Pre-call hook that adds a fallback x-opencode-session when the
             # client did not send one (see callbacks.yaml).
             callbacks:
