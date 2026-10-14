@@ -61,11 +61,13 @@ spec:
             APP_ENV: production
             CORS_ORIGINS: '["https://manual.lapis-dev.work"]'
             UPLOAD_DIR: /tmp/uploads
-            # Whisper via the in-cluster LiteLLM gateway (OpenRouter
+            # Whisper via the in-cluster LiteLLM gateway (backed by OpenRouter
             # openai/whisper-large-v3-turbo). WHISPER_API_KEY is the LiteLLM
-            # master key, provided by the sealed api-env secret.
+            # master key, provided by the sealed api-env secret. The app first
+            # requests verbose_json and falls back to json, which this model
+            # requires.
             WHISPER_BASE_URL: http://litellm.litellm.svc.cluster.local:4000/v1
-            WHISPER_MODEL: openrouter/whisper-large-v3-turbo
+            WHISPER_MODEL: openai/whisper-large-v3-turbo
           database:
             # SealedSecret with DATABASE_URL / QDRANT_URL + app config (envFrom).
             existingSecret: auto-manual-api-env
