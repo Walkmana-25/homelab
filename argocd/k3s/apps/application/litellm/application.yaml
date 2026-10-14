@@ -160,6 +160,14 @@ spec:
             # it the UI reports "Request/Response Data Not Available". Only new
             # requests are recorded; spend logs grow with traffic.
             store_prompts_in_spend_logs: true
+            # ―― Spend-log retention ――
+            # LiteLLM only registers the cleanup job when one of the
+            # maximum_*_retention_period settings is set; otherwise logs are
+            # kept forever (bounded only by the 5Gi postgres volume). Prompts
+            # roughly quadruple the per-row size, so cap it at 90 days and run
+            # the prune daily at 03:00.
+            maximum_spend_logs_retention_period: "90d"
+            maximum_spend_logs_cleanup_cron: "0 3 * * *"
             # Enable the Chat UI (Admin UI -> Chat, /ui/chat)
             enable_chat_ui: true
           litellm_settings:
