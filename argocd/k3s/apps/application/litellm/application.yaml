@@ -75,40 +75,21 @@ spec:
         # ── LiteLLM proxy config ───────────────────────────────
         # API keys come from the litellm-env SealedSecret.
         #
-        # Wildcard entries make every model under a provider callable by name as
-        # <provider>/<model>. The concrete model list shown in /v1/models and the
-        # admin UI is populated automatically by the litellm-model-sync CronJob
-        # (see model-sync.yaml), because LiteLLM's built-in discovery cannot
-        # follow these providers' custom /models paths.
+        # Models are populated automatically by the litellm-model-sync CronJob
+        # (see model-sync.yaml), which registers every model each provider
+        # exposes as <provider>/<model> (zai/..., iniad/..., iniad-claude/...).
+        #
+        # No wildcard model_list entries are declared: a "provider/*" entry makes
+        # LiteLLM expand the underlying provider's whole catalog (hundreds of
+        # bogus zai/<openai-model> names), and that expansion is still visible to
+        # the admin/master key even with model_info.discoverable=false.
         proxy_config:
-          model_list:
-            # z.ai (OpenAI-compatible)
-            - model_name: "zai/*"
-              litellm_params:
-                model: "openai/*"
-                api_base: "https://api.z.ai/api/coding/paas/v4"
-                api_key: os.environ/ZAI_API_KEY
-              # Keep wildcard expansions out of /v1/models (they would list the
-              # whole OpenAI catalog); the CronJob-synced models are what show up.
-              model_info:
-                discoverable: false
-            # INIAD OpenAI (OpenAI-compatible)
-            - model_name: "iniad/*"
-              litellm_params:
-                model: "openai/*"
-                api_base: "https://api.openai.iniad.org/api/v1"
-                api_key: os.environ/INIAD_API_KEY
-              model_info:
-                discoverable: false
-            # INIAD Claude (Anthropic-native; api_base must omit /v1 because
-            # LiteLLM appends /v1/messages)
-            - model_name: "iniad-claude/*"
-              litellm_params:
-                model: "anthropic/*"
-                api_base: "https://api.anthropic.iniad.org/api"
-                api_key: os.environ/INIAD_API_KEY
-              model_info:
-                discoverable: false
+          model_list: []
+          general_settings:
+            master_key: os.environ/PROXY_MASTER_KEY
+            store_model_in_db: true
+          litellm_settings:
+            drop_params: true
           general_settings:
             master_key: os.environ/PROXY_MASTER_KEY
             store_model_in_db: true
