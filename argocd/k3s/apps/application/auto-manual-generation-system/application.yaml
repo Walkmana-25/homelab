@@ -5,7 +5,7 @@
 #
 # All AI traffic is routed through the in-cluster LiteLLM gateway
 # (http://litellm.litellm.svc.cluster.local:4000). Secrets are provided as
-# SealedSecrets (see secrets.yaml) via the chart's existingSecret hooks.
+# SealedSecrets (see credentials.yaml) via the chart's existingSecret hooks.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
