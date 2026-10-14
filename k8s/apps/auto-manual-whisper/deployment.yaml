@@ -3,7 +3,7 @@
 #
 # Speaches serves /v1/audio/transcriptions with faster-whisper. The lightest
 # multilingual model (tiny, 39M params) is used for fast Japanese transcription;
-# it is loaded/downloaded on demand and cached on the whisper-model-cache PVC.
+# it is downloaded at startup and cached on the whisper-model-cache PVC.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -36,6 +36,9 @@ spec:
             # Lightest multilingual Whisper (Japanese supported).
             - name: WHISPER__MODEL
               value: Systran/faster-whisper-tiny
+            # Download the model at startup (speaches does not fetch on demand).
+            - name: PRELOAD_MODELS
+              value: '["Systran/faster-whisper-tiny"]'
             - name: WHISPER__INFERENCE_DEVICE
               value: cpu
             - name: WHISPER__COMPUTE_TYPE
@@ -54,17 +57,22 @@ spec:
             limits:
               cpu: "2"
               memory: 2Gi
+          # Covers the model download on first start (liveness/readiness wait).
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 60
           readinessProbe:
             httpGet:
               path: /health
               port: http
-            initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /health
               port: http
-            initialDelaySeconds: 30
             periodSeconds: 20
       volumes:
         - name: model-cache
