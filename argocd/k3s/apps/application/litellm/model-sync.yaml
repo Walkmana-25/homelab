@@ -9,6 +9,14 @@
 # API as <provider>/<model>, so the models show up in /v1/models and the admin UI
 # (persisted via store_model_in_db).
 #
+# Model cost is registered alongside the deployment. LiteLLM's built-in cost map
+# only knows public model names, so gateway-specific ids (glm-4.6, deepseek-v4.1-flash,
+# kimi-k3, ...) would otherwise be billed at $0. Instead the job pulls per-model
+# pricing from models.dev (USD per 1M tokens) and writes it into the deployment's
+# model_info as LiteLLM's per-token fields. A small explicit override table
+# (/scripts/costs.json) wins over models.dev and fills the gaps it does not cover.
+# INIAD is left unpriced (its endpoint is not in models.dev).
+#
 # Each provider declares the LiteLLM model "mode". INIAD's OpenAI endpoint is called
 # through the Responses API (/api/v1/responses), so its models use mode "responses":
 # LiteLLM forwards /v1/responses straight to that endpoint and bridges
@@ -39,7 +47,8 @@ data:
 
     # Each provider: the public model prefix, the LiteLLM adapter used to call it,
     # the api_base for chat, the /models listing URL (None when unsupported), the
-    # env var holding the API key and the LiteLLM model "mode".
+    # env var holding the API key, the LiteLLM model "mode" and the models.dev
+    # provider key used to look up per-model pricing ("pricing_provider").
     #
     # "mode" is a fixed protocol ("chat" / "responses") or "auto": with "auto" the
     # protocol is probed per model, preferring the Responses API (see deployment_for).
@@ -51,6 +60,7 @@ data:
             "models_url": "https://api.z.ai/api/coding/paas/v4/models",
             "key_env": "ZAI_API_KEY",
             "mode": "chat",
+            "pricing_provider": "zai",
         },
         {
             "prefix": "iniad",
@@ -83,6 +93,7 @@ data:
             "models_url": "https://opencode.ai/inference/go/v1/models",
             "key_env": "OPENCODE_API_KEY",
             "mode": "auto",
+            "pricing_provider": "opencode-go",
             "session_header": "x-opencode-session",
             "anthropic_api_base": "https://opencode.ai/inference/go",
             # Cloudflare in front of the gateway rejects the stock Python urllib
@@ -91,6 +102,17 @@ data:
             "sync_version": 2,
         },
     ]
+
+    # models.dev publishes per-model pricing for the providers we proxy, keyed by
+    # provider and model id. Values are USD per 1M tokens. Fetched once per run;
+    # on failure the run degrades to overrides-only rather than dropping prices.
+    PRICE_URL = "https://models.dev/api.json"
+    COSTS_PATH = "/scripts/costs.json"
+
+    # model_info fields written for drift detection. Only the reliably-echoed
+    # subset is compared, so pricing we set but LiteLLM does not read back (cache
+    # rates, long-context tiers) never triggers a recreate loop.
+    COST_SIGNATURE = ("input_cost_per_token", "output_cost_per_token", "base_model")
 
 
     def proxy_request(path, method="GET", payload=None):
@@ -174,22 +196,126 @@ data:
         raise RuntimeError("no supported protocol")
 
 
+    def fetch_prices():
+        """{prefix: {model_id: cost}} from models.dev, or None when unreachable."""
+        request = urllib.request.Request(
+            PRICE_URL,
+            headers={"User-Agent": "litellm-model-sync/1.0"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                catalog = json.loads(response.read().decode())
+        except Exception as error:  # noqa: BLE001
+            print(f"price catalog unavailable (models.dev): {error}", flush=True)
+            return None
+        prices = {}
+        for provider in PROVIDERS:
+            key = provider.get("pricing_provider")
+            models = (catalog.get(key) or {}).get("models") if key else None
+            if models:
+                prices[provider["prefix"]] = {
+                    model_id: (entry.get("cost") or {})
+                    for model_id, entry in models.items()
+                }
+        return prices
+
+
+    def load_overrides():
+        """Explicit per-model pricing keyed by <prefix>/<model_id> (see costs.json)."""
+        try:
+            with open(COSTS_PATH) as handle:
+                return json.load(handle)
+        except FileNotFoundError:
+            return {}
+        except Exception as error:  # noqa: BLE001
+            print(f"costs.json ignored: {error}", flush=True)
+            return {}
+
+
+    def cost_fields(provider, model_id, prices, overrides, prices_ok):
+        """model_info pricing for one model, or None when pricing is unknown.
+
+        Returns a dict of LiteLLM per-token fields (1M-token rates divided down).
+        None means "no data": the deployment is created/kept without pricing
+        rather than having a previous price stripped off.
+        """
+        name = f"{provider['prefix']}/{model_id}"
+        entry = overrides.get(name)
+        if entry is None:
+            if not prices_ok:
+                return None
+            entry = (prices.get(provider["prefix"]) or {}).get(model_id)
+        if not entry:
+            return None
+
+        fields = {}
+        for source, target in (
+            ("input", "input_cost_per_token"),
+            ("output", "output_cost_per_token"),
+            ("cache_read", "cache_read_input_token_cost"),
+            ("cache_write", "cache_creation_input_token_cost"),
+        ):
+            if entry.get(source) is not None:
+                fields[target] = entry[source] / 1_000_000
+        for tier in entry.get("tiers") or []:
+            size = (tier.get("tier") or {}).get("size")
+            if not size or size % 1000:
+                continue
+            suffix = f"_above_{size // 1000}k_tokens"
+            if tier.get("input") is not None:
+                fields["input_cost_per_token" + suffix] = tier["input"] / 1_000_000
+            if tier.get("output") is not None:
+                fields["output_cost_per_token" + suffix] = tier["output"] / 1_000_000
+        # Optional fallback: pin pricing to a LiteLLM built-in entry instead.
+        if entry.get("base_model"):
+            fields["base_model"] = entry["base_model"]
+        return fields
+
+
+    def same_cost(desired, current):
+        """Compare the reliably-echoed pricing fields, ignoring float noise."""
+        for key in COST_SIGNATURE:
+            want, have = desired.get(key), current.get(key)
+            if want is None and have is None:
+                continue
+            if want is None or have is None:
+                return False
+            if isinstance(want, str) or isinstance(have, str):
+                if want != have:
+                    return False
+            elif abs(want - have) > abs(want) * 1e-6:
+                return False
+        return True
+
+
     def existing_models():
-        """model_name -> {"id", "model", "mode", "sync_version"} for drift detection."""
+        """model_name -> {"id", "model", "mode", "sync_version", "cost"} for drift."""
         result = {}
         for model in proxy_request("/model/info").get("data", []):
             info = model.get("model_info") or {}
+            cost = {}
+            for source in (info, model):
+                for key in COST_SIGNATURE:
+                    if source.get(key) is not None:
+                        cost[key] = source[key]
             result[model["model_name"]] = {
                 "id": info.get("id"),
                 "model": (model.get("litellm_params") or {}).get("model"),
                 "mode": info.get("mode"),
                 "sync_version": info.get("sync_version"),
+                "cost": cost,
             }
         return result
 
 
     def main():
         existing = existing_models()
+        prices = fetch_prices()
+        prices_ok = prices is not None
+        prices = prices or {}
+        overrides = load_overrides()
+        if not prices_ok:
+            print("pricing from costs.json only this run", flush=True)
         prefixes = {p["prefix"] for p in PROVIDERS}
         desired = set()
 
@@ -207,26 +333,27 @@ data:
                 desired.add(name)
                 session = f"litellm-{provider['prefix']}-{model_id}"
                 current = existing.get(name)
+                cost = cost_fields(provider, model_id, prices, overrides, prices_ok)
 
                 recreate = False
                 if current and current["id"] is not None:
                     if sync_version is not None and current["sync_version"] != sync_version:
                         recreate = True
-                    elif mode == "auto":
-                        # The protocol is probed on creation; an existing
-                        # deployment is trusted as-is.
-                        continue
-                    elif (
-                        current["model"] == f"{provider['provider']}/{model_id}"
-                        and current["mode"] == mode
+                    elif mode != "auto" and (
+                        current["model"] != f"{provider['provider']}/{model_id}"
+                        or current["mode"] != mode
                     ):
-                        continue
-                    else:
+                        # A fixed-mode provider moved between adapters/protocols.
                         recreate = True
-                if recreate:
-                    # Recreate on drift (the provider moved between protocols, or
-                    # the deployment shape changed). /model/update cannot change
-                    # model_info, so delete + add is the reliable path.
+                    elif cost is not None and not same_cost(cost, current["cost"]):
+                        # Pricing changed (models.dev re-price or new override).
+                        recreate = True
+                    if not recreate:
+                        # Already current: an "auto" deployment keeps its probed
+                        # protocol, matching ones are left untouched.
+                        continue
+                    # /model/update cannot change model_info, so delete + add is
+                    # the reliable path for any drift.
                     try:
                         proxy_request("/model/delete", "POST", {"id": current["id"]})
                     except urllib.error.HTTPError as error:
@@ -240,6 +367,8 @@ data:
                     continue
 
                 model_info = {"mode": effective_mode}
+                if cost:
+                    model_info.update(cost)
                 if sync_version is not None:
                     model_info["sync_version"] = sync_version
                 try:
@@ -275,6 +404,13 @@ data:
 
     if __name__ == "__main__":
         main()
+  # Explicit per-model pricing, keyed by <prefix>/<model_id>. Wins over
+  # models.dev and fills its gaps. Values are USD per 1M tokens; supported keys
+  # are input / output / cache_read / cache_write plus an optional base_model
+  # (a LiteLLM built-in cost-map entry to price from instead). Example:
+  #   { "zai/glm-4.6": { "input": 0.6, "output": 2.2, "cache_read": 0.11 } }
+  costs.json: |
+    {}
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -285,7 +421,7 @@ metadata:
     app.kubernetes.io/managed-by: argocd
     app.kubernetes.io/part-of: application
 spec:
-  schedule: "*/30 * * * *"
+  schedule: "0 */6 * * *"
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 120
   successfulJobsHistoryLimit: 1
