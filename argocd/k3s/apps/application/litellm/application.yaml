@@ -106,16 +106,12 @@ spec:
         proxy_config:
           model_list: []
           # ── Web search (self-hosted) ───────────────────────────
-          # Register the in-cluster search backends as LiteLLM search tools
-          # (Perplexity-compatible API). Call them as:
-          #   POST /v1/search/searxng    or    /v1/search/firecrawl
-          #   POST /v1/search  with {"search_tool_name": "..."}
+          # Register the in-cluster search backend as a LiteLLM search tool
+          # (Perplexity-compatible API). Call it as:
+          #   POST /v1/search/web_search
+          #   POST /v1/search  with {"search_tool_name": "web_search"}
           search_tools:
-            - search_tool_name: searxng
-              litellm_params:
-                search_provider: searxng
-                api_base: http://searxng.searxng.svc.cluster.local:8080
-            - search_tool_name: firecrawl
+            - search_tool_name: web_search
               litellm_params:
                 search_provider: firecrawl
                 # Firecrawl runs with USE_DB_AUTHENTICATION=false, so the key
@@ -158,21 +154,9 @@ spec:
               enabled_providers:
                 - openai
                 - anthropic
-              # Which search_tools entry to run. Defaults to the first
-              # (searxng); switch to firecrawl for full-page markdown results.
-              search_tool_name: searxng
-          # ── MCP gateway ────────────────────────────────────────
-          # Expose the homelab MCP servers (aggregated by the mcp-proxy in the
-          # mcp-proxy namespace) through LiteLLM's MCP gateway. The proxy's nginx
-          # sidecar requires a bearer token (MCP_PROXY_TOKEN, sealed secret
-          # litellm-mcp) and strips it before forwarding upstream.
-          mcp_servers:
-            mcps:
-              url: "http://mcp-proxy.mcp-proxy.svc.cluster.local:9090/mcp"
-              transport: "http"
-              auth_type: "bearer_token"
-              auth_value: os.environ/MCP_PROXY_TOKEN
-              description: "Homelab MCP proxy (deepwiki, searxng, firecrawl, context7)"
+              # Which search_tools entry to run (web_search -> Firecrawl,
+              # which returns full-page markdown results).
+              search_tool_name: web_search
 
   destination:
     server: https://kubernetes.default.svc
