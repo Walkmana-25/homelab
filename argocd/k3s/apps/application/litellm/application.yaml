@@ -88,12 +88,18 @@ spec:
                 model: "openai/*"
                 api_base: "https://api.z.ai/api/coding/paas/v4"
                 api_key: os.environ/ZAI_API_KEY
+              # Keep wildcard expansions out of /v1/models (they would list the
+              # whole OpenAI catalog); the CronJob-synced models are what show up.
+              model_info:
+                discoverable: false
             # INIAD OpenAI (OpenAI-compatible)
             - model_name: "iniad/*"
               litellm_params:
                 model: "openai/*"
                 api_base: "https://api.openai.iniad.org/api/v1"
                 api_key: os.environ/INIAD_API_KEY
+              model_info:
+                discoverable: false
             # INIAD Claude (Anthropic-native; api_base must omit /v1 because
             # LiteLLM appends /v1/messages)
             - model_name: "iniad-claude/*"
@@ -101,6 +107,8 @@ spec:
                 model: "anthropic/*"
                 api_base: "https://api.anthropic.iniad.org/api"
                 api_key: os.environ/INIAD_API_KEY
+              model_info:
+                discoverable: false
           general_settings:
             master_key: os.environ/PROXY_MASTER_KEY
             store_model_in_db: true
