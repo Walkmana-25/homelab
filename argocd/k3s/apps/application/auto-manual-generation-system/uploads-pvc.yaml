@@ -1,0 +1,26 @@
+---
+# Persistent storage for uploaded audio (UPLOAD_DIR).
+#
+# The upstream chart has no volume hook for the API deployment, so the PVC is
+# created here and mounted into the API container via the child Application's
+# Helm post-renderer patch (see application.yaml).
+#
+# ssd (LINSTOR, RWO) is used because the API runs as non-root (uid 10001) and
+# needs fsGroup-based ownership, which block volumes honour.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: auto-manual-uploads
+  namespace: auto-manual
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ssd
+  resources:
+    requests:
+      storage: 5Gi

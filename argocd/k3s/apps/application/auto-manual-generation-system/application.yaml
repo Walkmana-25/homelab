@@ -60,6 +60,9 @@ spec:
           env:
             APP_ENV: production
             CORS_ORIGINS: '["https://manual.lapis-dev.work"]'
+            # Uploaded audio is stored on the auto-manual-uploads PVC
+            # (mounted via the post-renderer patch below).
+            UPLOAD_DIR: /data/uploads
           database:
             # SealedSecret with DATABASE_URL / QDRANT_URL + app config (envFrom).
             existingSecret: auto-manual-api-env
@@ -103,6 +106,36 @@ spec:
                 - path: /
                   pathType: Prefix
                   service: frontend
+      # The chart has no volume hook for the API, so patch the rendered
+      # Deployment to mount the uploads PVC. Recreate strategy keeps a single
+      # pod, which is required for a ReadWriteOnce volume during rollouts.
+      postRenderer:
+        kustomize:
+          patches:
+            - target:
+                group: apps
+                version: v1
+                kind: Deployment
+                name: auto-manual-api
+              patch: |-
+                - op: replace
+                  path: /spec/strategy
+                  value:
+                    type: Recreate
+                - op: add
+                  path: /spec/template/spec/securityContext/fsGroup
+                  value: 10001
+                - op: add
+                  path: /spec/template/spec/volumes/-
+                  value:
+                    name: uploads
+                    persistentVolumeClaim:
+                      claimName: auto-manual-uploads
+                - op: add
+                  path: /spec/template/spec/containers/0/volumeMounts/-
+                  value:
+                    name: uploads
+                    mountPath: /data/uploads
   destination:
     server: https://kubernetes.default.svc
     namespace: auto-manual
