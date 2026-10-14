@@ -30,6 +30,18 @@ spec:
           pullPolicy: IfNotPresent
           tag: "v1.105.0"
 
+        # ── Public origin ──────────────────────────────────────
+        # LiteLLM runs behind the cloudflare-tunnel ingress, which terminates
+        # TLS, so the proxy pod only ever sees http. The MCP OAuth flow needs
+        # the real public origin to build its own callback URL: with
+        # PROXY_BASE_URL unset, LiteLLM resolves its origin from the request
+        # (http://<internal-host>:4000) and tries to register
+        # http://.../callback with the upstream IdP. Notion's MCP requires
+        # HTTPS redirect URIs, so DCR/authorize fails. Also marks session/SSO
+        # cookies Secure. Full origin only: no trailing slash, no path.
+        envVars:
+          PROXY_BASE_URL: https://litellm.lapis-dev.work
+
         # ── Credentials (SealedSecret, see credentials.yaml) ───
         # Master key + LITELLM_SALT_KEY + provider API keys
         masterkeySecretName: litellm-masterkey
