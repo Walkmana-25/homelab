@@ -36,9 +36,6 @@ spec:
             # Lightest multilingual Whisper (Japanese supported).
             - name: WHISPER__MODEL
               value: Systran/faster-whisper-tiny
-            # Download the model at startup (speaches does not fetch on demand).
-            - name: PRELOAD_MODELS
-              value: '["Systran/faster-whisper-tiny"]'
             - name: WHISPER__INFERENCE_DEVICE
               value: cpu
             - name: WHISPER__COMPUTE_TYPE
