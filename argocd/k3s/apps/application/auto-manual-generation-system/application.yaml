@@ -61,6 +61,9 @@ spec:
             APP_ENV: production
             CORS_ORIGINS: '["https://manual.lapis-dev.work"]'
             UPLOAD_DIR: /tmp/uploads
+            # Self-hosted Whisper (speaches) for lightweight Japanese STT.
+            WHISPER_BASE_URL: http://whisper:8000/v1
+            WHISPER_MODEL: Systran/faster-whisper-tiny
           database:
             # SealedSecret with DATABASE_URL / QDRANT_URL + app config (envFrom).
             existingSecret: auto-manual-api-env

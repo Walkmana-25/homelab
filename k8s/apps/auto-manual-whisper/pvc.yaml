@@ -1,0 +1,15 @@
+---
+# HuggingFace model cache so the (tiny) Whisper model survives pod restarts.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: whisper-model-cache
+  labels:
+    app.kubernetes.io/name: whisper
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ssd
+  resources:
+    requests:
+      storage: 2Gi
