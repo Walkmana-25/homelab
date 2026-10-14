@@ -7,6 +7,11 @@
 # CronJob does the same job from outside: it fetches each provider's /models and
 # registers every model with the LiteLLM management API as <provider>/<model>, so the
 # models show up in /v1/models and the admin UI (persisted via store_model_in_db).
+#
+# Each provider declares the LiteLLM model "mode". INIAD's OpenAI endpoint is called
+# through the Responses API (/api/v1/responses), so its models use mode "responses":
+# LiteLLM forwards /v1/responses straight to that endpoint and bridges
+# /v1/chat/completions to it as well. z.ai stays on the chat completions API.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -26,8 +31,9 @@ data:
     MASTER_KEY = os.environ["LITELLM_MASTER_KEY"]
 
     # Each provider: the public model prefix, the LiteLLM adapter used to call it,
-    # the api_base for chat, the /models listing URL (None when unsupported) and the
-    # env var holding the API key.
+    # the api_base for chat, the /models listing URL (None when unsupported), the
+    # env var holding the API key and the LiteLLM model "mode" (chat completions vs
+    # the Responses API).
     PROVIDERS = [
         {
             "prefix": "zai",
@@ -35,6 +41,7 @@ data:
             "api_base": "https://api.z.ai/api/coding/paas/v4",
             "models_url": "https://api.z.ai/api/coding/paas/v4/models",
             "key_env": "ZAI_API_KEY",
+            "mode": "chat",
         },
         {
             "prefix": "iniad",
@@ -42,6 +49,8 @@ data:
             "api_base": "https://api.openai.iniad.org/api/v1",
             "models_url": "https://api.openai.iniad.org/api/v1/models",
             "key_env": "INIAD_API_KEY",
+            # Call INIAD's OpenAI models through the Responses API.
+            "mode": "responses",
         },
         {
             # INIAD Claude is Anthropic-native and has no /models endpoint, so its
@@ -51,6 +60,7 @@ data:
             "api_base": "https://api.anthropic.iniad.org/api",
             "models_url": None,
             "key_env": "INIAD_API_KEY",
+            "mode": "chat",
         },
     ]
 
@@ -83,8 +93,16 @@ data:
 
 
     def existing_models():
-        data = proxy_request("/model/info").get("data", [])
-        return {m["model_name"]: m.get("model_info", {}).get("id") for m in data}
+        """model_name -> {"id", "model", "mode"} for drift detection."""
+        result = {}
+        for model in proxy_request("/model/info").get("data", []):
+            info = model.get("model_info") or {}
+            result[model["model_name"]] = {
+                "id": info.get("id"),
+                "model": (model.get("litellm_params") or {}).get("model"),
+                "mode": info.get("mode"),
+            }
+        return result
 
 
     def main():
@@ -99,11 +117,28 @@ data:
                 print(f"[{provider['prefix']}] discovery failed: {error}", flush=True)
                 continue
             print(f"[{provider['prefix']}] discovered {len(model_ids)} models", flush=True)
+            mode = provider.get("mode", "chat")
             for model_id in model_ids:
                 name = f"{provider['prefix']}/{model_id}"
                 desired.add(name)
-                if name in existing:
+                target_model = f"{provider['provider']}/{model_id}"
+                current = existing.get(name)
+                if (
+                    current
+                    and current["id"] is not None
+                    and current["model"] == target_model
+                    and current["mode"] == mode
+                ):
                     continue
+                # Recreate models whose stored definition drifted (e.g. the provider
+                # moved from chat completions to the Responses API). /model/update
+                # cannot change model_info.mode, so delete + add is the reliable path.
+                if current and current["id"] is not None:
+                    try:
+                        proxy_request("/model/delete", "POST", {"id": current["id"]})
+                    except urllib.error.HTTPError as error:
+                        print(f"  ! delete {name}: {error.code} {error.read().decode()[:160]}", flush=True)
+                        continue
                 try:
                     proxy_request(
                         "/model/new",
@@ -111,11 +146,11 @@ data:
                         {
                             "model_name": name,
                             "litellm_params": {
-                                "model": f"{provider['provider']}/{model_id}",
+                                "model": target_model,
                                 "api_base": provider["api_base"],
                                 "api_key": "os.environ/" + provider["key_env"],
                             },
-                            "model_info": {"mode": "chat"},
+                            "model_info": {"mode": mode},
                         },
                     )
                     print(f"  + {name}", flush=True)
@@ -124,12 +159,12 @@ data:
 
         # Drop models this job added previously that the provider no longer lists.
         # Wildcard config entries ("*") and unrelated models are left untouched.
-        for name, model_id in existing.items():
-            if "*" in name or "/" not in name or model_id is None:
+        for name, entry in existing.items():
+            if "*" in name or "/" not in name or entry["id"] is None:
                 continue
             if name.split("/", 1)[0] in prefixes and name not in desired:
                 try:
-                    proxy_request("/model/delete", "POST", {"id": model_id})
+                    proxy_request("/model/delete", "POST", {"id": entry["id"]})
                     print(f"  - {name}", flush=True)
                 except urllib.error.HTTPError as error:
                     print(f"  ! delete {name}: {error.code} {error.read().decode()[:160]}", flush=True)
