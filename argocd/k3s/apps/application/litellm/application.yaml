@@ -73,19 +73,40 @@ spec:
           enabled: false
 
         # ── LiteLLM proxy config ───────────────────────────────
-        # Only the proxy essentials are managed here. Provider credentials
-        # (ZAI_API_KEY, INIAD_API_KEY, INIAD_BASE_URL, INIAD_CLAUDE_URL) come
-        # from the litellm-env SealedSecret. Models are managed from the UI
-        # (store_model_in_db persists them in Postgres), so no model_list is
-        # declared in Git and ArgoCD selfHeal will not remove UI-added models.
+        # Provider credentials (ZAI_API_KEY, INIAD_API_KEY, INIAD_BASE_URL,
+        # INIAD_CLAUDE_URL) come from the litellm-env SealedSecret.
+        #
+        # Wildcard model entries + litellm_settings.check_provider_endpoint
+        # make the proxy auto-discover each provider's models from its
+        # /models endpoint, so /v1/models lists them as <provider>/<model>
+        # (e.g. zai/glm-4.5-air, iniad/gpt-5.4-mini).
         proxy_config:
-          # Explicitly empty: the chart's default values ship a sample model_list
-          # (gpt-3.5-turbo/fake) which we must clear.
-          model_list: []
+          model_list:
+            # z.ai (OpenAI-compatible)
+            - model_name: "zai/*"
+              litellm_params:
+                model: "openai/*"
+                api_base: "https://api.z.ai/api/coding/paas/v4"
+                api_key: os.environ/ZAI_API_KEY
+            # INIAD OpenAI (OpenAI-compatible)
+            - model_name: "iniad/*"
+              litellm_params:
+                model: "openai/*"
+                api_base: os.environ/INIAD_BASE_URL
+                api_key: os.environ/INIAD_API_KEY
+            # INIAD Claude (Anthropic-native; its gateway has no /models
+            # endpoint, so models are not auto-listed but remain callable as
+            # iniad-claude/<model>)
+            - model_name: "iniad-claude/*"
+              litellm_params:
+                model: "anthropic/*"
+                api_base: os.environ/INIAD_CLAUDE_URL
+                api_key: os.environ/INIAD_API_KEY
           general_settings:
             master_key: os.environ/PROXY_MASTER_KEY
             store_model_in_db: true
           litellm_settings:
+            check_provider_endpoint: true
             drop_params: true
 
   destination:
