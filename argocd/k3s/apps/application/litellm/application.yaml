@@ -16,8 +16,9 @@ metadata:
 spec:
   project: default
   source:
-    # ArgoCD resolves the OCI chart registry from the repoURL (no oci:// prefix)
-    repoURL: ghcr.io/berriai/litellm-helm
+    # OCI chart (no oci:// prefix). ArgoCD appends "/<chart>" to repoURL, so the
+    # artifact is pulled from ghcr.io/berriai/litellm-helm.
+    repoURL: ghcr.io/berriai
     chart: litellm-helm
     targetRevision: 1.105.0
     helm:
