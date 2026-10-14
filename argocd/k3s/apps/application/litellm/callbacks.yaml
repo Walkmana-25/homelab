@@ -1,0 +1,40 @@
+---
+# Custom LiteLLM callback: fallback x-opencode-session for OpenCode Go.
+#
+# The proxy forwards the client's own x-opencode-session (see model_group_settings
+# in application.yaml), but OpenCode Go rejects any request without that header.
+# This pre-call hook adds a fallback session only when the client did not send one,
+# so real per-conversation sessions still pass through untouched.
+#
+# Loaded via litellm_settings.callbacks in application.yaml, which resolves
+# "callbacks.opencode_session.opencode_session_handler" against the config file's
+# directory (/etc/litellm/config.yaml -> /etc/litellm/callbacks/opencode_session.py).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-callbacks
+  namespace: litellm
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+data:
+  opencode_session.py: |
+    from litellm.integrations.custom_logger import CustomLogger
+
+    FALLBACK_SESSION = "litellm-fallback"
+
+
+    class OpenCodeSessionFallback(CustomLogger):
+        async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
+            if not str(data.get("model") or "").startswith("opencode-go/"):
+                return data
+            headers = data.get("headers")
+            if not isinstance(headers, dict):
+                headers = {}
+                data["headers"] = headers
+            if not any(name.lower() == "x-opencode-session" for name in headers):
+                headers["x-opencode-session"] = FALLBACK_SESSION
+            return data
+
+
+    opencode_session_handler = OpenCodeSessionFallback()

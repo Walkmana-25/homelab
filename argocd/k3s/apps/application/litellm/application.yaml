@@ -38,6 +38,18 @@ spec:
           - litellm-env
           - litellm-mcp
 
+        # ── Custom callback ────────────────────────────────────
+        # Pre-call hook (see callbacks.yaml) that supplies a fallback
+        # x-opencode-session when the client did not send one. Mounted next to
+        # the config file so litellm_settings.callbacks can resolve it.
+        volumes:
+          - name: callbacks
+            configMap:
+              name: litellm-callbacks
+        volumeMounts:
+          - name: callbacks
+            mountPath: /etc/litellm/callbacks
+
         # ── Resources ──────────────────────────────────────────
         resources:
           requests:
@@ -97,6 +109,10 @@ spec:
             enable_chat_ui: true
           litellm_settings:
             drop_params: true
+            # Pre-call hook that adds a fallback x-opencode-session when the
+            # client did not send one (see callbacks.yaml).
+            callbacks:
+              - callbacks.opencode_session.opencode_session_handler
             # Forward the client's x-* headers (notably x-opencode-session) to
             # OpenCode Go only, so per-conversation sessions pass through instead
             # of the proxy's static session. Scoped so z.ai / INIAD never receive
