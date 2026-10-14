@@ -105,20 +105,24 @@ spec:
         # the admin/master key even with model_info.discoverable=false.
         proxy_config:
           model_list: []
-          # ── Web search (Tavily + self-hosted Firecrawl, LB) ────
-          # Two search_tools entries share the name "web_search"; LiteLLM's
+          # ── Web search (Tavily + Exa + Firecrawl, LB) ──────────
+          # Three search_tools entries share the name "web_search"; LiteLLM's
           # search router load-balances / falls back across same-named tools.
           # Call it as:
           #   POST /v1/search/web_search
           #   POST /v1/search  with {"search_tool_name": "web_search"}
-          # Tavily key comes from the litellm-env SealedSecret. Firecrawl runs
-          # with USE_DB_AUTHENTICATION=false, so its key is never verified - but
-          # LiteLLM refuses requests without one.
+          # Tavily/Exa keys come from the litellm-env SealedSecret. Firecrawl
+          # runs with USE_DB_AUTHENTICATION=false, so its key is never verified -
+          # but LiteLLM refuses requests without one.
           search_tools:
             - search_tool_name: web_search
               litellm_params:
                 search_provider: tavily
                 api_key: os.environ/TAVILY_API_KEY
+            - search_tool_name: web_search
+              litellm_params:
+                search_provider: exa_ai
+                api_key: os.environ/EXA_API_KEY
             - search_tool_name: web_search
               litellm_params:
                 search_provider: firecrawl
