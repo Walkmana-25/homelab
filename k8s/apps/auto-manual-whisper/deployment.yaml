@@ -50,10 +50,12 @@ spec:
           resources:
             requests:
               cpu: 200m
-              memory: 512Mi
+              memory: 1Gi
             limits:
               cpu: "2"
-              memory: 2Gi
+              # 2Gi was not enough: the CPU image (onnxruntime + faster-whisper)
+              # spiked past the limit during transcription and was OOMKilled.
+              memory: 4Gi
           # Covers the model download on first start (liveness/readiness wait).
           startupProbe:
             httpGet:
