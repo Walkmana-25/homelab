@@ -15,8 +15,9 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: argocd
     app.kubernetes.io/part-of: application
-  annotations:
-    argocd.argoproj.io/sync-wave: "-1"
+  # No sync-wave: applied in the same wave as the child Application. With the
+  # ssd (WaitForFirstConsumer) class the PVC only binds once the API pod mounts
+  # it, so an earlier wave would deadlock the umbrella sync on PVC health.
 spec:
   accessModes:
     - ReadWriteOnce
