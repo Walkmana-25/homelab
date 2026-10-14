@@ -21,12 +21,17 @@
 # Each provider declares the LiteLLM model "mode". INIAD's OpenAI endpoint is called
 # through the Responses API (/api/v1/responses), so its models use mode "responses":
 # LiteLLM forwards /v1/responses straight to that endpoint and bridges
-# /v1/chat/completions to it as well. z.ai stays on the chat completions API.
+# /v1/chat/completions to it as well. z.ai (GLM Coding Plan) exposes an OpenAI
+# Responses endpoint at api.z.ai/api/v1 that accepts every coding-plan model, so its
+# models use mode "responses" too; discovery stays on the coding /models list because
+# the Responses /models only lists a few Codex models.
 #
 # OpenCode Go is a multi-protocol gateway: some models speak the Responses API, some
 # only chat completions and a few only the Anthropic Messages API. Its mode is "auto",
-# so the protocol is probed per model (Responses API preferred). The gateway requires
-# an x-opencode-session header; the proxy forwards the client's own (see
+# so the protocol is probed per model (Responses API preferred). Models that only
+# speak chat completions get use_chat_completions_api, so a /v1/responses request is
+# bridged to their /chat/completions upstream. The gateway requires an
+# x-opencode-session header; the proxy forwards the client's own (see
 # model_group_settings in application.yaml) rather than pinning a static one.
 apiVersion: v1
 kind: ConfigMap
@@ -55,12 +60,17 @@ data:
     # protocol is probed per model, preferring the Responses API (see deployment_for).
     PROVIDERS = [
         {
+            # GLM Coding Plan. Its OpenAI Responses endpoint (api.z.ai/api/v1)
+            # accepts every coding-plan model, so they are called through the
+            # Responses API (chat completions is bridged to it). Discovery stays
+            # on the coding /models list, which lists the full set - the
+            # Responses /models endpoint only exposes a few Codex models.
             "prefix": "zai",
             "provider": "openai",
-            "api_base": "https://api.z.ai/api/coding/paas/v4",
+            "api_base": "https://api.z.ai/api/v1",
             "models_url": "https://api.z.ai/api/coding/paas/v4/models",
             "key_env": "ZAI_API_KEY",
-            "mode": "chat",
+            "mode": "responses",
             "pricing_provider": "zai",
         },
         {
@@ -197,6 +207,21 @@ data:
         raise RuntimeError("no supported protocol")
 
 
+    def wants_bridge(provider, mode, current):
+        """True when /v1/responses must be bridged to the upstream chat endpoint.
+
+        Only openai-compatible upstreams that speak just chat completions need the
+        bridge (LiteLLM already bridges Anthropic-native deployments). A fixed-mode
+        provider knows its adapter and protocol; for "auto" they are read off the
+        existing deployment, which records the probed model string and protocol.
+        """
+        if mode != "auto":
+            return provider["provider"] == "openai" and mode == "chat"
+        if not current:
+            return False
+        return str(current["model"]).startswith("openai/") and current["mode"] == "chat"
+
+
     def fetch_prices():
         """{prefix: {model_id: cost}} from models.dev, or None when unreachable."""
         request = urllib.request.Request(
@@ -308,6 +333,7 @@ data:
                 "mode": info.get("mode"),
                 "sync_version": info.get("sync_version"),
                 "cost": cost,
+                "bridge": bool(params.get("use_chat_completions_api")),
             }
         return result
 
@@ -338,6 +364,7 @@ data:
                 session = f"litellm-{provider['prefix']}-{model_id}"
                 current = existing.get(name)
                 cost = cost_fields(provider, model_id, prices, overrides, prices_ok)
+                bridge = wants_bridge(provider, mode, current)
 
                 recreate = False
                 if current and current["id"] is not None:
@@ -348,6 +375,9 @@ data:
                         or current["mode"] != mode
                     ):
                         # A fixed-mode provider moved between adapters/protocols.
+                        recreate = True
+                    elif current["bridge"] != bridge:
+                        # The responses-to-chat bridge was added or removed.
                         recreate = True
                     elif cost is not None and not same_cost(cost, current["cost"]):
                         # Pricing changed (models.dev re-price or new override).
@@ -382,6 +412,9 @@ data:
                     "api_base": api_base,
                     "api_key": "os.environ/" + provider["key_env"],
                 }
+                if litellm_model.startswith("openai/") and effective_mode == "chat":
+                    # Upstream only speaks chat completions: bridge /v1/responses.
+                    litellm_params["use_chat_completions_api"] = True
                 model_info = {"mode": effective_mode}
                 for key, value in (cost or {}).items():
                     if key == "base_model":

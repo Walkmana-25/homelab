@@ -91,10 +91,13 @@ spec:
         # Models are populated automatically by the litellm-model-sync CronJob
         # (see model-sync.yaml), which registers every model each provider
         # exposes as <provider>/<model> (zai/..., iniad/..., iniad-claude/...,
-        # opencode-go/...). INIAD OpenAI models are registered with mode
-        # "responses", so LiteLLM calls INIAD's /responses endpoint (bridging
-        # /v1/chat/completions to it). OpenCode Go is probed per model and uses
-        # the Responses API wherever the model supports it.
+        # opencode-go/...). INIAD OpenAI and z.ai (GLM Coding Plan, whose OpenAI
+        # Responses endpoint is api.z.ai/api/v1) models are registered with mode
+        # "responses", so LiteLLM calls the provider's /responses endpoint
+        # (bridging /v1/chat/completions to it). OpenCode Go is probed per model
+        # and uses the Responses API wherever the model supports it; chat-only
+        # models get use_chat_completions_api, so /v1/responses is bridged to
+        # their /chat/completions upstream.
         #
         # No wildcard model_list entries are declared: a "provider/*" entry makes
         # LiteLLM expand the underlying provider's whole catalog (hundreds of
