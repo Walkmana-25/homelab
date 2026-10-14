@@ -81,9 +81,33 @@ spec:
             usernameKey: username
             passwordKey: password
 
-        # Single replica - no cross-pod coordination store required
+        # ── Redis (bundled Bitnami subchart) ───────────────────
+        # Backs response caching and cross-pod coordination: with redis.enabled
+        # the chart injects REDIS_HOST/REDIS_PORT/REDIS_PASSWORD and adds
+        # general_settings.coordination_redis automatically.
+        #
+        # auth.existingSecret pins the password (the subchart's own secret would
+        # be re-randomised on every ArgoCD render, since `helm template` cannot
+        # run the cluster `lookup` it relies on). See credentials.yaml.
         redis:
-          enabled: false
+          enabled: true
+          architecture: standalone
+          auth:
+            enabled: true
+            existingSecret: litellm-redis-auth
+            existingSecretPasswordKey: redis-password
+          master:
+            persistence:
+              enabled: true
+              storageClass: ssd
+              size: 2Gi
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 250m
+                memory: 256Mi
 
         # ── LiteLLM proxy config ───────────────────────────────
         # API keys come from the litellm-env SealedSecret.
