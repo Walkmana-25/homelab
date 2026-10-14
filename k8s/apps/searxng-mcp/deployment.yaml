@@ -23,6 +23,10 @@ spec:
               value: http://searxng.searxng.svc.cluster.local:8080
             - name: MCP_HTTP_PORT
               value: "3000"
+            # Bind to all interfaces so other pods (e.g. the mcp-proxy) can
+            # reach it; the image defaults to 127.0.0.1.
+            - name: MCP_HTTP_HOST
+              value: "0.0.0.0"
           ports:
             - containerPort: 3000
               name: http
