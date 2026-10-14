@@ -105,17 +105,23 @@ spec:
         # the admin/master key even with model_info.discoverable=false.
         proxy_config:
           model_list: []
-          # ── Web search (self-hosted) ───────────────────────────
-          # Register the in-cluster search backend as a LiteLLM search tool
-          # (Perplexity-compatible API). Call it as:
+          # ── Web search (Tavily + self-hosted Firecrawl, LB) ────
+          # Two search_tools entries share the name "web_search"; LiteLLM's
+          # search router load-balances / falls back across same-named tools.
+          # Call it as:
           #   POST /v1/search/web_search
           #   POST /v1/search  with {"search_tool_name": "web_search"}
+          # Tavily key comes from the litellm-env SealedSecret. Firecrawl runs
+          # with USE_DB_AUTHENTICATION=false, so its key is never verified - but
+          # LiteLLM refuses requests without one.
           search_tools:
             - search_tool_name: web_search
               litellm_params:
+                search_provider: tavily
+                api_key: os.environ/TAVILY_API_KEY
+            - search_tool_name: web_search
+              litellm_params:
                 search_provider: firecrawl
-                # Firecrawl runs with USE_DB_AUTHENTICATION=false, so the key
-                # is never verified - but LiteLLM refuses requests without one.
                 api_base: http://api.firecrawl.svc.cluster.local:3002/v2
                 api_key: self-hosted
           general_settings:
@@ -126,11 +132,9 @@ spec:
           litellm_settings:
             drop_params: true
             # Pre-call hook that adds a fallback x-opencode-session when the
-            # client did not send one (see callbacks.yaml), plus LiteLLM's
-            # built-in web search interception.
+            # client did not send one (see callbacks.yaml).
             callbacks:
               - callbacks.opencode_session.opencode_session_handler
-              - websearch_interception
             # Forward the client's x-* headers (notably x-opencode-session) to
             # OpenCode Go only, so per-conversation sessions pass through instead
             # of the proxy's static session. Scoped so z.ai / INIAD never receive
@@ -138,25 +142,6 @@ spec:
             model_group_settings:
               forward_client_headers_to_llm_api:
                 - opencode-go/*
-            # ── Automatic web search ───────────────────────────────
-            # When a client sends a web search tool (LiteLLM's standard
-            # litellm_web_search, the legacy WebSearch, or Anthropic's native
-            # web_search_* as Claude Code does), the callback intercepts the
-            # tool call, runs the search server-side against the search_tools
-            # above, and feeds the results back to the model. The upstream
-            # provider never sees the tool, so models that have no server-side
-            # search (z.ai, INIAD, OpenCode Go) can search the web too.
-            websearch_interception_params:
-              # Providers whose models may run the agentic search loop. Every
-              # model registered by litellm-model-sync uses the openai adapter
-              # (zai, iniad, opencode-go) or the anthropic one (iniad-claude,
-              # OpenCode Go Anthropic-mode models).
-              enabled_providers:
-                - openai
-                - anthropic
-              # Which search_tools entry to run (web_search -> Firecrawl,
-              # which returns full-page markdown results).
-              search_tool_name: web_search
 
   destination:
     server: https://kubernetes.default.svc
