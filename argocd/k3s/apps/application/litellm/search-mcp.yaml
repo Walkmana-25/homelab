@@ -26,8 +26,8 @@ data:
         "/v1/search/web_search": {
           "post": {
             "operationId": "web_search",
-            "summary": "Search the web",
-            "description": "Search the web. Results come from LiteLLM's search_tools, load-balanced across Tavily, Exa and the self-hosted Firecrawl.",
+            "summary": "Search the web. Results come from LiteLLM's search_tools (Tavily, Exa and the cluster-local SearXNG), load-balanced with fallback. SearXNG is occasionally flaky: if this call fails or returns an error, retry it 2-3 times before giving up - a repeat call usually succeeds.",
+            "description": "Search the web through the LiteLLM gateway's search_tools, which load-balance across Tavily, Exa and the cluster-local SearXNG and fall back across them. If the call fails or returns an error, retry it 2-3 times before giving up.",
             "requestBody": {
               "required": true,
               "content": {

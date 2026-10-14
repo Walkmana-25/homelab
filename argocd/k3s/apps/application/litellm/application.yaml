@@ -150,13 +150,18 @@ spec:
         # the admin/master key even with model_info.discoverable=false.
         proxy_config:
           model_list: []
-          # ── Web search (Tavily + Exa, LB) ──────────────────────
-          # Two search_tools entries share the name "web_search"; LiteLLM's
+          # ── Web search (Tavily + Exa + self-hosted SearXNG, LB) ─
+          # Three search_tools entries share the name "web_search"; LiteLLM's
           # search router load-balances / falls back across same-named tools.
           # Call it as:
           #   POST /v1/search/web_search
           #   POST /v1/search  with {"search_tool_name": "web_search"}
-          # Keys come from the litellm-env SealedSecret.
+          # Tavily/Exa keys come from the litellm-env SealedSecret; SearXNG runs
+          # in-cluster and needs no key.
+          #
+          # SearXNG is less reliable than the hosted providers (it aggregates
+          # upstream engines), so callers should retry a failed search; the MCP
+          # tool description says so (see search-mcp.yaml).
           #
           # Firecrawl is deliberately NOT part of this LB. Its /search returns
           # full-page markdown per result unless scrapeOptions says otherwise
@@ -175,6 +180,10 @@ spec:
               litellm_params:
                 search_provider: exa_ai
                 api_key: os.environ/EXA_API_KEY
+            - search_tool_name: web_search
+              litellm_params:
+                search_provider: searxng
+                api_base: http://searxng.searxng.svc.cluster.local:8080
           general_settings:
             master_key: os.environ/PROXY_MASTER_KEY
             store_model_in_db: true
