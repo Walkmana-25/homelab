@@ -1,0 +1,39 @@
+---
+# CloudNativePG cluster for LiteLLM.
+# sync-wave -1 so the Application is created before the litellm Application
+# (sync-wave 1). The Cluster resource itself lives in cluster/.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: litellm-postgres
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: application
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Walkmana-25/homelab.git
+    targetRevision: HEAD
+    path: argocd/k3s/apps/application/litellm/cluster
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: litellm
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

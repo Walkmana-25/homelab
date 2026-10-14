@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: litellm
+  annotations:
+    # Create the namespace before the SealedSecrets below are applied
+    argocd.argoproj.io/sync-wave: "-1"
