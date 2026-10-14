@@ -73,55 +73,20 @@ spec:
           enabled: false
 
         # ── LiteLLM proxy config ───────────────────────────────
+        # Only the proxy essentials are managed here. Provider credentials
+        # (ZAI_API_KEY, INIAD_API_KEY, INIAD_BASE_URL, INIAD_CLAUDE_URL) come
+        # from the litellm-env SealedSecret. Models are managed from the UI
+        # (store_model_in_db persists them in Postgres), so no model_list is
+        # declared in Git and ArgoCD selfHeal will not remove UI-added models.
         proxy_config:
+          # Explicitly empty: the chart's default values ship a sample model_list
+          # (gpt-3.5-turbo/fake) which we must clear.
+          model_list: []
           general_settings:
             master_key: os.environ/PROXY_MASTER_KEY
+            store_model_in_db: true
           litellm_settings:
             drop_params: true
-          model_list:
-            # ── z.ai (OpenAI-compatible) ──────────────────────
-            - model_name: glm-5.1
-              litellm_params:
-                model: openai/glm-5.1
-                api_base: https://api.z.ai/api/coding/paas/v4
-                api_key: os.environ/ZAI_API_KEY
-            - model_name: glm-5
-              litellm_params:
-                model: openai/glm-5
-                api_base: https://api.z.ai/api/coding/paas/v4
-                api_key: os.environ/ZAI_API_KEY
-            - model_name: glm-5-turbo
-              litellm_params:
-                model: openai/glm-5-turbo
-                api_base: https://api.z.ai/api/coding/paas/v4
-                api_key: os.environ/ZAI_API_KEY
-            - model_name: glm-4.7
-              litellm_params:
-                model: openai/glm-4.7
-                api_base: https://api.z.ai/api/coding/paas/v4
-                api_key: os.environ/ZAI_API_KEY
-            - model_name: glm-4.6v
-              litellm_params:
-                model: openai/glm-4.6v
-                api_base: https://api.z.ai/api/coding/paas/v4
-                api_key: os.environ/ZAI_API_KEY
-            - model_name: glm-4.5-air
-              litellm_params:
-                model: openai/glm-4.5-air
-                api_base: https://api.z.ai/api/coding/paas/v4
-                api_key: os.environ/ZAI_API_KEY
-            # ── INIAD OpenAI (OpenAI-compatible) ──────────────
-            - model_name: gpt-5.4-mini
-              litellm_params:
-                model: openai/gpt-5.4-mini
-                api_base: os.environ/INIAD_BASE_URL
-                api_key: os.environ/INIAD_API_KEY
-            # ── INIAD Claude (Anthropic-native API: /v1/messages) ──
-            - model_name: claude-sonnet-4-6
-              litellm_params:
-                model: anthropic/claude-sonnet-4-6
-                api_base: os.environ/INIAD_CLAUDE_URL
-                api_key: os.environ/INIAD_API_KEY
 
   destination:
     server: https://kubernetes.default.svc
