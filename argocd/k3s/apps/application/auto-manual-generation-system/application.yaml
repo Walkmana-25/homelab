@@ -61,9 +61,11 @@ spec:
             APP_ENV: production
             CORS_ORIGINS: '["https://manual.lapis-dev.work"]'
             UPLOAD_DIR: /tmp/uploads
-            # Self-hosted Whisper (speaches) for lightweight Japanese STT.
-            WHISPER_BASE_URL: http://whisper:8000/v1
-            WHISPER_MODEL: Systran/faster-whisper-tiny
+            # Whisper via the in-cluster LiteLLM gateway (OpenRouter
+            # openai/whisper-large-v3-turbo). WHISPER_API_KEY is the LiteLLM
+            # master key, provided by the sealed api-env secret.
+            WHISPER_BASE_URL: http://litellm.litellm.svc.cluster.local:4000/v1
+            WHISPER_MODEL: openrouter/whisper-large-v3-turbo
           database:
             # SealedSecret with DATABASE_URL / QDRANT_URL + app config (envFrom).
             existingSecret: auto-manual-api-env
