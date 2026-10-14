@@ -130,9 +130,11 @@ spec:
           litellm_settings:
             drop_params: true
             # Pre-call hook that adds a fallback x-opencode-session when the
-            # client did not send one (see callbacks.yaml).
+            # client did not send one (see callbacks.yaml), plus LiteLLM's
+            # built-in web search interception.
             callbacks:
               - callbacks.opencode_session.opencode_session_handler
+              - websearch_interception
             # Forward the client's x-* headers (notably x-opencode-session) to
             # OpenCode Go only, so per-conversation sessions pass through instead
             # of the proxy's static session. Scoped so z.ai / INIAD never receive
@@ -140,6 +142,25 @@ spec:
             model_group_settings:
               forward_client_headers_to_llm_api:
                 - opencode-go/*
+            # ── Automatic web search ───────────────────────────────
+            # When a client sends a web search tool (LiteLLM's standard
+            # litellm_web_search, the legacy WebSearch, or Anthropic's native
+            # web_search_* as Claude Code does), the callback intercepts the
+            # tool call, runs the search server-side against the search_tools
+            # above, and feeds the results back to the model. The upstream
+            # provider never sees the tool, so models that have no server-side
+            # search (z.ai, INIAD, OpenCode Go) can search the web too.
+            websearch_interception_params:
+              # Providers whose models may run the agentic search loop. Every
+              # model registered by litellm-model-sync uses the openai adapter
+              # (zai, iniad, opencode-go) or the anthropic one (iniad-claude,
+              # OpenCode Go Anthropic-mode models).
+              enabled_providers:
+                - openai
+                - anthropic
+              # Which search_tools entry to run. Defaults to the first
+              # (searxng); switch to firecrawl for full-page markdown results.
+              search_tool_name: searxng
           # ── MCP gateway ────────────────────────────────────────
           # Expose the homelab MCP servers (aggregated by the mcp-proxy in the
           # mcp-proxy namespace) through LiteLLM's MCP gateway. The proxy's nginx
