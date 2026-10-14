@@ -155,6 +155,11 @@ spec:
           general_settings:
             master_key: os.environ/PROXY_MASTER_KEY
             store_model_in_db: true
+            # Persist request/response payloads alongside each spend log so the
+            # Admin UI can show them (Logs -> request/response details). Without
+            # it the UI reports "Request/Response Data Not Available". Only new
+            # requests are recorded; spend logs grow with traffic.
+            store_prompts_in_spend_logs: true
             # Enable the Chat UI (Admin UI -> Chat, /ui/chat)
             enable_chat_ui: true
           litellm_settings:
