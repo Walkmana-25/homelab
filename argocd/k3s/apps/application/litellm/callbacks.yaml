@@ -3,7 +3,8 @@
 # application.yaml, which resolves "callbacks.<module>.<handler>" against the
 # config file's directory (/etc/litellm/config.yaml -> /etc/litellm/callbacks/).
 #
-# - opencode_session.py: fallback x-opencode-session for OpenCode Go.
+# - opencode_session.py: x-opencode-session on OpenCode Go deployments only
+#   (chosen by destination, client value preferred over a static fallback).
 # - compact_search.py: bound the payload of provider-hosted search results.
 apiVersion: v1
 kind: ConfigMap
@@ -49,22 +50,64 @@ data:
 
     compact_search_handler = CompactSearchParams()
   opencode_session.py: |
+    from urllib.parse import urlparse
+
     from litellm.integrations.custom_logger import CustomLogger
 
+    # OpenCode Go refuses requests that carry no session id (HTTP 400
+    # MissingSessionID), and uses that id for its own routing and prompt
+    # caching - so a per-conversation value is what should reach it, not one
+    # shared constant. Group names cannot tell us where a request is going: a
+    # client may call an alias or an auto router whose tiers include OpenCode
+    # Go, and retries/fallbacks pick another deployment after the request was
+    # built. The destination is only known per deployment attempt, hence the
+    # per-attempt deployment hook: it fires for every real deployment call and
+    # exposes that attempt's api_base. The header is added only when api_base
+    # is OpenCode Go, so z.ai / INIAD never receive it; a client-supplied value
+    # is always preferred, and FALLBACK_SESSION is only for clients that send
+    # none (it keeps the request working, at the cost of that conversation not
+    # being pinned to one session id upstream).
+    SESSION_HEADER = "x-opencode-session"
+    OPENCODE_HOST = "opencode.ai"
     FALLBACK_SESSION = "litellm-fallback"
 
 
+    def _header_value(headers, name):
+        if not isinstance(headers, dict):
+            return None
+        for key, value in headers.items():
+            if str(key).lower() == name:
+                return value
+        return None
+
+
+    def _is_opencode_api_base(api_base):
+        host = (urlparse(str(api_base or "")).hostname or "").lower()
+        return host == OPENCODE_HOST or host.endswith("." + OPENCODE_HOST)
+
+
     class OpenCodeSessionFallback(CustomLogger):
-        async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
-            if not str(data.get("model") or "").startswith("opencode-go/"):
-                return data
-            headers = data.get("headers")
+        async def async_pre_call_deployment_hook(self, kwargs, call_type):
+            litellm_params = kwargs.get("litellm_params")
+            if not isinstance(litellm_params, dict):
+                return None
+            if not _is_opencode_api_base(litellm_params.get("api_base")):
+                return None
+            headers = kwargs.get("headers")
             if not isinstance(headers, dict):
                 headers = {}
-                data["headers"] = headers
-            if not any(name.lower() == "x-opencode-session" for name in headers):
-                headers["x-opencode-session"] = FALLBACK_SESSION
-            return data
+            if _header_value(headers, SESSION_HEADER) is None:
+                # The client's own per-conversation id, when it sent one: nothing
+                # else in the proxy keeps it, because this request may have come
+                # in under a group name that the forwarding allowlist does not
+                # match.
+                client_session = _header_value(
+                    (litellm_params.get("proxy_server_request") or {}).get("headers"),
+                    SESSION_HEADER,
+                )
+                headers[SESSION_HEADER] = client_session or FALLBACK_SESSION
+            kwargs["headers"] = headers
+            return kwargs
 
 
     opencode_session_handler = OpenCodeSessionFallback()

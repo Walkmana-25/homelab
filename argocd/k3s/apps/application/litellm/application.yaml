@@ -51,9 +51,10 @@ spec:
           - litellm-mcp
 
         # ── Custom callback ────────────────────────────────────
-        # Pre-call hook (see callbacks.yaml) that supplies a fallback
-        # x-opencode-session when the client did not send one. Mounted next to
-        # the config file so litellm_settings.callbacks can resolve it.
+        # Per-deployment hook (see callbacks.yaml) that supplies
+        # x-opencode-session on OpenCode Go deployments - the client's own value
+        # when it sent one, a fallback otherwise. Mounted next to the config file
+        # so litellm_settings.callbacks can resolve it.
         #
         # The search-mcp volume carries a hand-written OpenAPI spec (see
         # search-mcp.yaml) that mcp_servers.litellm_search turns into an MCP
@@ -244,17 +245,26 @@ spec:
             # LiteLLM's SSRF guard blocks by default.
             user_url_allowed_hosts:
               - litellm.litellm.svc.cluster.local
-            # Pre-call hook: fallback x-opencode-session when the client did not
-            # send one (see callbacks.yaml). compact_search bounds the payload of
+            # opencode_session_handler supplies x-opencode-session on OpenCode Go
+            # deployments (see callbacks.yaml). It runs per deployment attempt and
+            # decides from that attempt's api_base, so retries, fallback steps and
+            # alias / auto-router groups that land on OpenCode Go are covered,
+            # while z.ai / INIAD never receive the header. The client's own
+            # per-conversation id wins when it sent one; the static fallback only
+            # rescues clients that send none. compact_search bounds the payload of
             # /v1/search (results above), which also keeps the MCP web_search
             # tool's response small.
             callbacks:
               - callbacks.opencode_session.opencode_session_handler
               - callbacks.compact_search.compact_search_handler
-            # Forward the client's x-* headers (notably x-opencode-session) to
-            # OpenCode Go only, so per-conversation sessions pass through instead
-            # of the proxy's static session. Scoped so z.ai / INIAD never receive
-            # client headers.
+            # Forward the client's x-* headers (notably x-opencode-session) for
+            # requests that name an opencode-go/... model directly, so the proxy's
+            # own session never replaces the client's. This is the documented
+            # allowlist path and stays scoped to OpenCode Go: the list is matched
+            # against the model group the client asked for, so listing alias /
+            # auto-router groups here would also send client headers to whatever
+            # other providers those groups can route to. Requests arriving under
+            # such group names are covered by the deployment hook instead.
             model_group_settings:
               forward_client_headers_to_llm_api:
                 - opencode-go/*
