@@ -1,102 +1,58 @@
-# AGENTS.md
+# Repository Guidelines
 
-Infrastructure-as-code repo for a home Kubernetes cluster (k3s). No application code, no tests. Two independent subsystems with their own lint pipelines.
+## Project Structure
 
-## Repository Layout
+- `ansible/` provisions VMs and k3s: NFS, Longhorn, LINSTOR, router agents, node metrics, Fluent Bit, and Argo CD.
+- `argocd/` contains the GitOps “App of Apps” manifests under `argocd/k3s/apps/`.
+- `k8s/apps/` contains standalone manifests that are not managed by Argo CD.
+- `scripts/` provides VM image and bootstrap tooling.
+- `docs/` is the source of truth for operational procedures; start with `docs/README.md`.
 
-- `ansible/` — Provision bare-metal nodes (NFS, k3s cluster install, staging/production). Has its own `Makefile`, `ansible.cfg`, and `requirements.yml`.
-- `argocd/` — ArgoCD "App of Apps" GitOps manifests for the k3s cluster. Has its own `Makefile`.
-- `k8s/apps/` — Standalone K8s manifests (not managed by ArgoCD).
-- `.devcontainer/` — Full dev toolchain container (ansible, kubectl, kustomize, kubeconform, kubeseal, kompose).
+## Build, Test, and Development Commands
 
-## Lint & Verify
+Run Ansible checks from `ansible/`:
 
-**Each subsystem has its own Makefile — always `cd` into the directory first.**
-
-### Ansible (`ansible/`)
-
-```
+```bash
 cd ansible
-make check          # lint + syntax-check playbooks + validate all inventories
-make lint           # ansible-lint only
-make install-lint   # pip install ansible + ansible-lint (via requirements.txt)
-make install-requirements  # ansible-galaxy collection install (k3s-ansible, kubernetes.core)
+make install-lint          # install ansible and ansible-lint
+make install-requirements  # install pinned Ansible collections
+make check                 # lint, syntax-check, and validate inventories
 ```
 
-CI runs: `make install-lint` → `make install-requirements` → `make check`
+Run Argo CD checks from `argocd/`:
 
-### ArgoCD (`argocd/`)
-
-```
+```bash
 cd argocd
-make check          # lint-yaml + validate-kustomize + validate-manifests (runs all three)
-make lint           # same as check
+make check                 # run yamllint, kustomize build, and kubeconform
 ```
 
-Requires on PATH: `yamllint`, `kustomize`, `kubeconform`
+There is no application test suite. CI runs both subsystem checks on pushes to `main` and pull requests.
 
-Yamllint config (inline in Makefile): disables line-length, truthy check-keys, document-start.
-Kubeconform skips: `Application, IPAddressPool, L2Advertisement, SealedSecret, ConfigMap, Ingress`
+## Style and Conventions
 
-## ArgoCD App Structure
+- YAML uses two-space indentation and descriptive, kebab-case filenames.
+- Prefer Kubernetes manifests and kustomize overlays over imperative cluster changes.
+- Keep Ansible tasks idempotent; use fully qualified module names where practical.
+- Preserve playbook and install order in `ansible/Makefile`; `install-k3s` depends on that order.
+- Update the matching document under `docs/` when behavior, architecture, or operational precautions change.
 
-Two umbrella "App of Apps" in `argocd/k3s/`:
-- `application-infrastructure.yaml` → `argocd/k3s/apps/infrastructure/` (platform: cert-manager, longhorn, metallb, sealed-secrets, loki, grafana, etc.)
-- `application-application.yaml` → `argocd/k3s/apps/application/` (user apps: dawarich, firecrawl, librechat, searxng, etc.)
+## Commit and Pull Request Guidelines
 
-Each subdirectory under `apps/` is a kustomize overlay.
+Use Conventional Commits, for example:
 
-## Ansible Key Commands
+- `feat(litellm): expose web search as an MCP tool`
+- `fix(searxng): bound result size`
+- `docs(argocd): document application overlays`
 
-All run from `ansible/`. Default inventory is staging (`ansible.cfg`).
+Keep one logical change per commit. Pull requests should describe intent, blast radius, rollout or rollback steps, and validation output. Link related issues. Do not submit unverified cluster-state changes.
 
-`common` (also the first step of `make install-k3s`, runnable standalone as `make common`) disables and masks multipathd on all nodes — required before k3s/storage provisioning.
+## Security and Configuration
 
-| Command | What it does |
-|---------|-------------|
-| `make install-k3s` | Multi-step: common (disable multipathd) → nfs-client → btrfs-longhorn → k3s install → kubeconfig → fetch-kubeconfig → argocd. **Order matters — do not reorder.** |
-| `make deploy-nfs` | NFS server setup via `inventories/k3s/inventory-nfs.yml` |
-| `make deploy-staging` | Run `site.yml` against staging inventory |
-| `make deploy-production` | Run `site.yml` against production inventory |
-| `make upgrade-k3s` | Rolling upgrade of k3s cluster |
+Never commit plaintext credentials, kubeconfigs, tokens, or generated secret material. Files named `secret.yaml` or `secrets.yaml` are ignored at the repository root. Store user-managed Kubernetes secrets as SealedSecrets; plain SealedSecret manifests are safe to commit. Review image versions, Helm targets, and inventory-specific values before deployment.
 
-## Secrets
+## Agent-Specific Instructions
 
-- `secret.yaml` and `secrets.yaml` are **gitignored** at root level.
-- Sealed Secrets (`kubeseal`) is used for encrypting secrets in-cluster. Sealed secret manifests are safe to commit.
-- Never commit plaintext secrets.
-
-## Dependencies
-
-- Ansible collection `k3s-io/k3s-ansible` is pinned to a **specific git SHA** in `ansible/requirements.yml` (not a release tag).
-- Renovate is configured to auto-update ArgoCD apps, Helm values, GitHub Actions, and Ansible deps weekly (Monday before 9am JST).
-
-## Observability Stack
-
-### Architecture
-
-- Metrics: node_exporter (installed on VMs via Ansible) -> technitium-sd (Technitium DNS zones -> Prometheus HTTP SD, 30s poll) -> vmagent -> VictoriaMetrics (vmsingle). Registering a DNS A record is the only onboarding step for metrics.
-- Logs (VMs): fluent-bit (journald) -> k3s-router nginx reverse proxy on port 3100 (DNS name k3s-router.k8s.cloud-milky.solufit.net) -> metallb LoadBalancer 10.2.0.110:3100 -> Loki. The nginx proxy on the router decouples VM-side config from cluster internals.
-- Logs (k8s pods): fluent-bit DaemonSet -> Loki (log_type=container).
-- New VM onboarding: register DNS A record (metrics auto-start) + run scripts/install-fluent-bit.sh one-liner (logs start). The script is byte-identical to the fluent_bit Ansible role.
-
-### Verified pitfalls (do not reintroduce)
-
-- The fluent-bit deb package does NOT create a service user (postinst only runs ldconfig/daemon-reload; the unit runs as root). Create the fluent-bit user/group BEFORE the buffer directory task or `install -o` fails on fresh VMs.
-- LogQL regex line filter operator is `|~` (`|=~` is invalid syntax). Case-insensitive: `|~ "(?i)pattern"`.
-- Select VM syslog streams with `hostname=~".+"` — k8s container logs from the DaemonSet have no hostname label and will pollute VM-scoped panels.
-- On VM agents the `service_name` label is always fluent-bit (useless). Filter by systemd unit instead: `| json unit="SYSTEMD_UNIT"`.
-- nginx on k3s-router MUST keep `access_log off` — the router's own journald is collected by fluent-bit, so access logging creates an amplification loop.
-- Template-cloned VMs share the same /etc/machine-id (known, accepted — hostnames never change; regenerate per-VM if that assumption changes).
-
-### Grafana dashboards (ConfigMap + sidecar)
-
-- Dashboards are ConfigMaps (label grafana_dashboard: "1", namespace monitoring) auto-loaded by the Grafana sidecar. After a ConfigMap change, propagation to Grafana takes a few minutes — verify the served definition via the Grafana API before concluding a dashboard fix failed.
-- Loki instant metric queries in a table panel return one [Time, Value] frame per series with labels on the Value field. Working transform chain: labelsToFields -> (let the table panel merge frames itself) -> renameByRegex. Do NOT use `concat` (renders empty) or `organize.indexByName` with renamed columns.
-- renameByRegex options key is `renamePattern` (NOT `rename` — an unknown key is silently ignored and the default `$1` replacement is applied, showing a literal "$1" column). Avoid parentheses in rename values.
-- journald level filtering: `| json priority="PRIORITY" | priority=~"[0-3]"` for error-level (emerg/alert/crit/err).
-
-### Local environment quirks
-
-- `commit.gpgsign=true` is set but no signing key is configured. Commit with `-c commit.gpgsign=false` (do not change git config).
-- Ansible commands require `LC_ALL=C.UTF-8` (system locales are not generated; plain runs fail with "could not initialize the preferred locale").
+- Present a Japanese implementation plan and obtain approval before modifying files.
+- Run read-only exploration first and delegate non-obvious technical research when needed.
+- Do not run provisioning, deployment, upgrade, reboot, or Git state-changing commands without explicit approval.
+- In this environment, run `LC_ALL=C.UTF-8` for Ansible commands and commit with `git -c commit.gpgsign=false`; do not alter global Git configuration.
