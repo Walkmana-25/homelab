@@ -49,6 +49,7 @@ spec:
         environmentSecrets:
           - litellm-env
           - litellm-mcp
+          - headroom-proxy-token
 
         # ── Custom callback ────────────────────────────────────
         # Routing filter hook (see callbacks.yaml) that supplies
@@ -163,6 +164,7 @@ spec:
                 guardrail: headroom
                 mode: pre_call
                 api_base: http://headroom.headroom.svc.cluster.local:8787
+                api_key: os.environ/HEADROOM_PROXY_TOKEN
                 default_on: false
           # ── Web search (Tavily + Exa + self-hosted SearXNG, LB) ─
           # Three search_tools entries share the name "web_search"; LiteLLM's

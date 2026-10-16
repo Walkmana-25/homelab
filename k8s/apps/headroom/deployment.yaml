@@ -30,6 +30,11 @@ spec:
               value: "1"
             - name: HEADROOM_TELEMETRY
               value: "off"
+            - name: HEADROOM_PROXY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: headroom-proxy-token
+                  key: HEADROOM_PROXY_TOKEN
           ports:
             - containerPort: 8787
               name: http
