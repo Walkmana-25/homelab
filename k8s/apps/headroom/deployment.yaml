@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: headroom
+  labels:
+    app.kubernetes.io/name: headroom
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: headroom
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: headroom
+    spec:
+      containers:
+        - name: proxy
+          image: ghcr.io/headroomlabs-ai/headroom:slim-nonroot-df11f27
+          imagePullPolicy: IfNotPresent
+          args:
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8787"
+          env:
+            # /v1/compress is loopback-only by default; LiteLLM calls it from
+            # another pod, so explicitly allow in-cluster callers.
+            - name: HEADROOM_COMPRESS_ALLOW_REMOTE
+              value: "1"
+            - name: HEADROOM_TELEMETRY
+              value: "off"
+          ports:
+            - containerPort: 8787
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
