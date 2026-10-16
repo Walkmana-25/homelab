@@ -160,7 +160,10 @@ spec:
           # Note that Headroom itself never compresses user/system messages
           # (HEADROOM_COMPRESS_USER_MESSAGES unset) or cache_control blocks,
           # so the payloads actually rewritten are tool outputs, RAG blocks,
-          # file reads, and similar bulk context.
+          # file reads, and similar bulk context. LiteLLM additionally withholds
+          # every assistant row, the last user row, and cache_control prefixes.
+          # unreachable_fallback keeps a Headroom outage from failing requests:
+          # fail_open forwards them uncompressed instead of returning 502.
           guardrails:
             - guardrail_name: headroom-compression
               litellm_params:
@@ -169,6 +172,7 @@ spec:
                 api_base: http://headroom.headroom.svc.cluster.local:8787
                 api_key: os.environ/HEADROOM_PROXY_TOKEN
                 default_on: true
+                unreachable_fallback: fail_open
           # ── Web search (Tavily + Exa + self-hosted SearXNG, LB) ─
           # Three search_tools entries share the name "web_search"; LiteLLM's
           # search router load-balances / falls back across same-named tools.
