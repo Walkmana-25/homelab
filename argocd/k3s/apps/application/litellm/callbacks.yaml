@@ -5,6 +5,8 @@
 #
 # - opencode_session.py: x-opencode-session on OpenCode Go deployments only
 #   (chosen by destination, client value preferred over a static fallback).
+# - opencode_models.py: register OpenCode Go models with LiteLLM's model cost
+#   map so the auto-router's context compaction can resolve their limits.
 # - compact_search.py: bound the payload of provider-hosted search results.
 apiVersion: v1
 kind: ConfigMap
@@ -130,3 +132,86 @@ data:
 
 
     opencode_session_handler = OpenCodeSessionFallback()
+  opencode_models.py: |
+    import litellm
+
+    from litellm.integrations.custom_logger import CustomLogger
+
+    # The complexity auto-router's context compaction resolves the tier model's
+    # context window through litellm.get_model_info(), which only consults the
+    # built-in model cost map. OpenCode Go deployments are registered under the
+    # generic "openai" provider (litellm_params.model = "openai/mimo-v2.6-pro"
+    # and friends), and those keys are not in the map - so any request large
+    # enough to arm compaction on an OpenCode Go tier failed with
+    # ModelNotMappedError (HTTP 500) before reaching the upstream. Small
+    # requests skip compaction, which is why the failure only showed up under
+    # real agent workloads.
+    #
+    # register_model() is LiteLLM's supported way to add entries; by default it
+    # also replays them after the cost map is refreshed at runtime. The values
+    # are transcribed from the built-in map entries for the underlying models
+    # (xiaomi_mimo/mimo-v2.6-*, zai/glm-*), which publish the same limits.
+    #
+    # When a new model joins an auto-router tier, its provider model string
+    # (litellm_params.model) must be registered here too, or large requests
+    # routed to that tier fail with ModelNotMappedError again.
+    OPENCODE_MODEL_COST = {
+        "openai/mimo-v2.6-flash": {
+            "max_tokens": 131072,
+            "max_input_tokens": 1048576,
+            "max_output_tokens": 131072,
+            "input_cost_per_token": 1.4e-07,
+            "output_cost_per_token": 2.8e-07,
+            "cache_read_input_token_cost": 2.8e-09,
+            "litellm_provider": "openai",
+            "mode": "chat",
+        },
+        "openai/mimo-v2.6-pro": {
+            "max_tokens": 131072,
+            "max_input_tokens": 1048576,
+            "max_output_tokens": 131072,
+            "input_cost_per_token": 4.35e-07,
+            "output_cost_per_token": 8.7e-07,
+            "cache_read_input_token_cost": 3.6e-09,
+            "litellm_provider": "openai",
+            "mode": "chat",
+        },
+        "openai/glm-5.3-flash": {
+            "max_input_tokens": 1048576,
+            "max_output_tokens": 128000,
+            "input_cost_per_token": 1.5e-07,
+            "output_cost_per_token": 5.0e-07,
+            "cache_read_input_token_cost": 3.0e-08,
+            "litellm_provider": "openai",
+            "mode": "chat",
+        },
+        "openai/glm-5.3": {
+            "max_input_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "input_cost_per_token": 1.4e-06,
+            "output_cost_per_token": 4.4e-06,
+            "cache_read_input_token_cost": 2.6e-07,
+            "litellm_provider": "openai",
+            "mode": "chat",
+        },
+    }
+
+
+    def register_opencode_models() -> None:
+        missing = {
+            key: entry
+            for key, entry in OPENCODE_MODEL_COST.items()
+            if key not in litellm.model_cost
+        }
+        if missing:
+            litellm.register_model(model_cost=missing)
+
+
+    register_opencode_models()
+
+
+    class OpencodeModelRegistration(CustomLogger):
+        """No-op callback; the import-time registration above is the purpose."""
+
+
+    opencode_models_handler = OpencodeModelRegistration()

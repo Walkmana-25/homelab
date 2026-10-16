@@ -255,8 +255,13 @@ spec:
             # the static fallback only rescues clients that send none.
             # compact_search bounds the payload of /v1/search (results above),
             # which also keeps the MCP web_search tool's response small.
+            # opencode_models_handler registers OpenCode Go models with the
+            # model cost map at import time (see callbacks.yaml), so the
+            # auto-router's context compaction resolves tier model limits
+            # instead of failing with ModelNotMappedError on large requests.
             callbacks:
               - callbacks.opencode_session.opencode_session_handler
+              - callbacks.opencode_models.opencode_models_handler
               - callbacks.compact_search.compact_search_handler
             # Forward the client's x-* headers (notably x-opencode-session) for
             # requests that name an opencode-go/... model directly, so the proxy's
