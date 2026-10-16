@@ -9,6 +9,14 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: headroom
+  # Nodes run at ~95% of their schedulable memory requests, so the default
+  # rolling update cannot place its surge pod (a third pod is unschedulable).
+  # Roll out by dropping one old pod first instead of temporarily doubling up.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     metadata:
       labels:
