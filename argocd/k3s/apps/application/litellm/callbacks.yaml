@@ -59,14 +59,22 @@ data:
     # caching - so a per-conversation value is what should reach it, not one
     # shared constant. Group names cannot tell us where a request is going: a
     # client may call an alias or an auto router whose tiers include OpenCode
-    # Go, and retries/fallbacks pick another deployment after the request was
-    # built. The destination is only known per deployment attempt, hence the
-    # per-attempt deployment hook: it fires for every real deployment call and
-    # exposes that attempt's api_base. The header is added only when api_base
-    # is OpenCode Go, so z.ai / INIAD never receive it; a client-supplied value
-    # is always preferred, and FALLBACK_SESSION is only for clients that send
-    # none (it keeps the request working, at the cost of that conversation not
-    # being pinned to one session id upstream).
+    # Go, and the auto router resolves its tier AFTER the request was built.
+    # Per-deployment hooks cannot inject headers in LiteLLM v1.105.0: the
+    # deployment-level pre-call hook only fires for the Responses API path and
+    # its return value is split into response params / litellm_params, so a
+    # "headers" key is dropped before the HTTP request is built. The routing
+    # filter hook (async_filter_deployments) is the one callback that sees the
+    # tier-resolved model together with its candidate deployments AND the
+    # request kwargs, on every routed attempt (chat and Responses, retries and
+    # fallbacks). The request kwargs' "headers" key is the same channel
+    # forward_client_headers_to_llm_api uses, so anything set there reaches the
+    # upstream on both call types. The header is added only when EVERY
+    # candidate deployment points at OpenCode Go, so z.ai / INIAD tiers never
+    # receive it; a client-supplied value is always preferred, and
+    # FALLBACK_SESSION is only for clients that send none (it keeps the request
+    # working, at the cost of that conversation not being pinned to one session
+    # id upstream).
     SESSION_HEADER = "x-opencode-session"
     OPENCODE_HOST = "opencode.ai"
     FALLBACK_SESSION = "litellm-fallback"
@@ -87,27 +95,38 @@ data:
 
 
     class OpenCodeSessionFallback(CustomLogger):
-        async def async_pre_call_deployment_hook(self, kwargs, call_type):
-            litellm_params = kwargs.get("litellm_params")
-            if not isinstance(litellm_params, dict):
-                return None
-            if not _is_opencode_api_base(litellm_params.get("api_base")):
-                return None
-            headers = kwargs.get("headers")
+        async def async_filter_deployments(
+            self,
+            model,
+            healthy_deployments,
+            messages=None,
+            request_kwargs=None,
+            parent_otel_span=None,
+        ):
+            if not isinstance(healthy_deployments, list) or not isinstance(request_kwargs, dict):
+                return healthy_deployments
+            if not healthy_deployments:
+                return healthy_deployments
+            for deployment in healthy_deployments:
+                litellm_params = deployment.get("litellm_params") if isinstance(deployment, dict) else None
+                api_base = litellm_params.get("api_base") if isinstance(litellm_params, dict) else None
+                if not _is_opencode_api_base(api_base):
+                    return healthy_deployments
+            headers = request_kwargs.get("headers")
             if not isinstance(headers, dict):
                 headers = {}
             if _header_value(headers, SESSION_HEADER) is None:
                 # The client's own per-conversation id, when it sent one: nothing
                 # else in the proxy keeps it, because this request may have come
                 # in under a group name that the forwarding allowlist does not
-                # match.
-                client_session = _header_value(
-                    (litellm_params.get("proxy_server_request") or {}).get("headers"),
-                    SESSION_HEADER,
-                )
+                # match (e.g. autorouter/agent), so it is re-read here from the
+                # original request.
+                proxy_request = request_kwargs.get("proxy_server_request")
+                client_headers = proxy_request.get("headers") if isinstance(proxy_request, dict) else None
+                client_session = _header_value(client_headers, SESSION_HEADER)
                 headers[SESSION_HEADER] = client_session or FALLBACK_SESSION
-            kwargs["headers"] = headers
-            return kwargs
+            request_kwargs["headers"] = headers
+            return healthy_deployments
 
 
     opencode_session_handler = OpenCodeSessionFallback()

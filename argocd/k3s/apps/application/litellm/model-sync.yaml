@@ -31,9 +31,9 @@
 # so the protocol is probed per model (Responses API preferred). Models that only
 # speak chat completions get use_chat_completions_api, so a /v1/responses request is
 # bridged to their /chat/completions upstream. The gateway requires an
-# x-opencode-session header; the proxy supplies the client's own per deployment
-# (see callbacks.yaml and model_group_settings in application.yaml) rather than
-# pinning a static one.
+# x-opencode-session header; the proxy supplies the client's own per routing
+# decision (see callbacks.yaml and model_group_settings in application.yaml)
+# rather than pinning a static one.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -96,7 +96,7 @@ data:
         {
             # OpenCode Go. Multi-protocol gateway, probed per model. The gateway
             # requires an x-opencode-session header; the proxy supplies it per
-            # deployment attempt, preferring the client's own value (see
+            # routing decision, preferring the client's own value (see
             # callbacks.yaml and model_group_settings in application.yaml), so no
             # static extra_headers are set here - extra_headers would outrank the
             # header the hook sets and shadow the client value. sync_version

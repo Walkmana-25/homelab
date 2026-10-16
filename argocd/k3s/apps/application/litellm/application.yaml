@@ -51,10 +51,10 @@ spec:
           - litellm-mcp
 
         # ── Custom callback ────────────────────────────────────
-        # Per-deployment hook (see callbacks.yaml) that supplies
+        # Routing filter hook (see callbacks.yaml) that supplies
         # x-opencode-session on OpenCode Go deployments - the client's own value
-        # when it sent one, a fallback otherwise. Mounted next to the config file
-        # so litellm_settings.callbacks can resolve it.
+        # when it sent one, a fallback otherwise. Mounted next to the config
+        # file so litellm_settings.callbacks can resolve it.
         #
         # The search-mcp volume carries a hand-written OpenAPI spec (see
         # search-mcp.yaml) that mcp_servers.litellm_search turns into an MCP
@@ -246,14 +246,15 @@ spec:
             user_url_allowed_hosts:
               - litellm.litellm.svc.cluster.local
             # opencode_session_handler supplies x-opencode-session on OpenCode Go
-            # deployments (see callbacks.yaml). It runs per deployment attempt and
-            # decides from that attempt's api_base, so retries, fallback steps and
-            # alias / auto-router groups that land on OpenCode Go are covered,
-            # while z.ai / INIAD never receive the header. The client's own
-            # per-conversation id wins when it sent one; the static fallback only
-            # rescues clients that send none. compact_search bounds the payload of
-            # /v1/search (results above), which also keeps the MCP web_search
-            # tool's response small.
+            # deployments (see callbacks.yaml). It runs as a routing filter, once
+            # the tier-resolved model's candidate deployments are known, and adds
+            # the header only when every candidate points at OpenCode Go - so
+            # retries, fallback steps and alias / auto-router tiers that land on
+            # OpenCode Go are covered, while z.ai / INIAD never receive the
+            # header. The client's own per-conversation id wins when it sent one;
+            # the static fallback only rescues clients that send none.
+            # compact_search bounds the payload of /v1/search (results above),
+            # which also keeps the MCP web_search tool's response small.
             callbacks:
               - callbacks.opencode_session.opencode_session_handler
               - callbacks.compact_search.compact_search_handler
@@ -264,7 +265,8 @@ spec:
             # against the model group the client asked for, so listing alias /
             # auto-router groups here would also send client headers to whatever
             # other providers those groups can route to. Requests arriving under
-            # such group names are covered by the deployment hook instead.
+            # such group names re-read the client header via proxy_server_request
+            # in the routing filter hook instead (see callbacks.yaml).
             model_group_settings:
               forward_client_headers_to_llm_api:
                 - opencode-go/*
