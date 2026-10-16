@@ -154,7 +154,10 @@ data:
     #
     # When a new model joins an auto-router tier, its provider model string
     # (litellm_params.model) must be registered here too, or large requests
-    # routed to that tier fail with ModelNotMappedError again.
+    # routed to that tier fail with ModelNotMappedError again. Note that the
+    # model-sync registrations put Responses API models behind a
+    # "responses/" prefix, so e.g. routing/glm-5.3-flash resolves to the key
+    # "openai/responses/glm-5.3-flash", not "openai/glm-5.3-flash".
     OPENCODE_MODEL_COST = {
         "openai/mimo-v2.6-flash": {
             "max_tokens": 131072,
@@ -185,7 +188,25 @@ data:
             "litellm_provider": "openai",
             "mode": "chat",
         },
+        "openai/responses/glm-5.3-flash": {
+            "max_input_tokens": 1048576,
+            "max_output_tokens": 128000,
+            "input_cost_per_token": 1.5e-07,
+            "output_cost_per_token": 5.0e-07,
+            "cache_read_input_token_cost": 3.0e-08,
+            "litellm_provider": "openai",
+            "mode": "chat",
+        },
         "openai/glm-5.3": {
+            "max_input_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "input_cost_per_token": 1.4e-06,
+            "output_cost_per_token": 4.4e-06,
+            "cache_read_input_token_cost": 2.6e-07,
+            "litellm_provider": "openai",
+            "mode": "chat",
+        },
+        "openai/responses/glm-5.3": {
             "max_input_tokens": 1000000,
             "max_output_tokens": 128000,
             "input_cost_per_token": 1.4e-06,
