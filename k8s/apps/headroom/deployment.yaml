@@ -5,7 +5,7 @@ metadata:
   labels:
     app.kubernetes.io/name: headroom
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: headroom
@@ -29,6 +29,11 @@ spec:
             - name: HEADROOM_COMPRESS_ALLOW_REMOTE
               value: "1"
             - name: HEADROOM_TELEMETRY
+              value: "off"
+            # The anonymous upload beacon (session summaries to Headroom Labs)
+            # is on by default and is not covered by HEADROOM_TELEMETRY, so turn
+            # it off explicitly to keep the pod from calling home.
+            - name: HEADROOM_BEACON
               value: "off"
             - name: HEADROOM_PROXY_TOKEN
               valueFrom:
