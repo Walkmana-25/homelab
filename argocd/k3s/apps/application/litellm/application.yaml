@@ -154,10 +154,13 @@ spec:
           model_list: []
           # ── Headroom prompt compression ────────────────────────
           # Compresses messages through the in-cluster Headroom proxy
-          # (POST /v1/compress) before the upstream LLM call. Compression is
-          # opt-in: send `"guardrails": ["headroom-compression"]` in the
-          # request body, or attach the guardrail to a virtual key. Set
-          # default_on only after validating output quality and latency.
+          # (POST /v1/compress) before the upstream LLM call. default_on
+          # applies it to every request that reaches the proxy; a caller can
+          # skip it per request with the `x-headroom-bypass: true` header.
+          # Note that Headroom itself never compresses user/system messages
+          # (HEADROOM_COMPRESS_USER_MESSAGES unset) or cache_control blocks,
+          # so the payloads actually rewritten are tool outputs, RAG blocks,
+          # file reads, and similar bulk context.
           guardrails:
             - guardrail_name: headroom-compression
               litellm_params:
@@ -165,7 +168,7 @@ spec:
                 mode: pre_call
                 api_base: http://headroom.headroom.svc.cluster.local:8787
                 api_key: os.environ/HEADROOM_PROXY_TOKEN
-                default_on: false
+                default_on: true
           # ── Web search (Tavily + Exa + self-hosted SearXNG, LB) ─
           # Three search_tools entries share the name "web_search"; LiteLLM's
           # search router load-balances / falls back across same-named tools.
