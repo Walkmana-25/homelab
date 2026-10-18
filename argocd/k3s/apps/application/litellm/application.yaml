@@ -138,13 +138,16 @@ spec:
         # Models are populated automatically by the litellm-model-sync CronJob
         # (see model-sync.yaml), which registers every model each provider
         # exposes as <provider>/<model> (zai/..., iniad/..., iniad-claude/...,
-        # opencode-go/...). INIAD OpenAI and z.ai (GLM Coding Plan, whose OpenAI
-        # Responses endpoint is api.z.ai/api/v1) models are registered with mode
-        # "responses", so LiteLLM calls the provider's /responses endpoint
-        # (bridging /v1/chat/completions to it). OpenCode Go is probed per model
-        # and uses the Responses API wherever the model supports it; chat-only
-        # models get use_chat_completions_api, so /v1/responses is bridged to
-        # their /chat/completions upstream.
+        # opencode-go/...) together with its pricing and context window
+        # (max_input_tokens/max_output_tokens on the deployment's model_info, read
+        # off models.dev), so /v1/models and /model/info report real limits
+        # instead of leaving clients to guess. INIAD OpenAI and z.ai (GLM Coding
+        # Plan, whose OpenAI Responses endpoint is api.z.ai/api/v1) models are
+        # registered with mode "responses", so LiteLLM calls the provider's
+        # /responses endpoint (bridging /v1/chat/completions to it). OpenCode Go is
+        # probed per model and uses the Responses API wherever the model supports
+        # it; chat-only models get use_chat_completions_api, so /v1/responses is
+        # bridged to their /chat/completions upstream.
         #
         # No wildcard model_list entries are declared: a "provider/*" entry makes
         # LiteLLM expand the underlying provider's whole catalog (hundreds of
@@ -277,10 +280,13 @@ spec:
             # the static fallback only rescues clients that send none.
             # compact_search bounds the payload of /v1/search (results above),
             # which also keeps the MCP web_search tool's response small.
-            # opencode_models_handler registers OpenCode Go models with the
-            # model cost map at import time (see callbacks.yaml), so the
-            # auto-router's context compaction resolves tier model limits
-            # instead of failing with ModelNotMappedError on large requests.
+            # opencode_models_handler mirrors each OpenCode Go deployment's context
+            # limits into the model cost map on every request (pre-call, read off
+            # the router), so the auto-router's context compaction resolves tier
+            # model limits instead of failing with ModelNotMappedError on large
+            # requests. The limits come from the deployment's own model_info,
+            # which the model-sync CronJob keeps filled from models.dev, so a new
+            # or re-windowed model needs no code change (see callbacks.yaml).
             callbacks:
               - callbacks.opencode_session.opencode_session_handler
               - callbacks.opencode_models.opencode_models_handler

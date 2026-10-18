@@ -5,8 +5,9 @@
 #
 # - opencode_session.py: x-opencode-session on OpenCode Go deployments only
 #   (chosen by destination, client value preferred over a static fallback).
-# - opencode_models.py: register OpenCode Go models with LiteLLM's model cost
-#   map so the auto-router's context compaction can resolve their limits.
+# - opencode_models.py: mirror the OpenCode Go deployments' context limits into
+#   LiteLLM's model cost map (pre-call, read off the router) so the auto-router's
+#   context compaction can resolve them.
 # - compact_search.py: bound the payload of provider-hosted search results.
 apiVersion: v1
 kind: ConfigMap
@@ -133,6 +134,8 @@ data:
 
     opencode_session_handler = OpenCodeSessionFallback()
   opencode_models.py: |
+    from urllib.parse import urlparse
+
     import litellm
 
     from litellm.integrations.custom_logger import CustomLogger
@@ -140,99 +143,125 @@ data:
     # The complexity auto-router's context compaction resolves the tier model's
     # context window through litellm.get_model_info(), which only consults the
     # built-in model cost map. OpenCode Go deployments are registered under the
-    # generic "openai" provider (litellm_params.model = "openai/mimo-v2.6-pro"
-    # and friends), and those keys are not in the map - so any request large
-    # enough to arm compaction on an OpenCode Go tier failed with
-    # ModelNotMappedError (HTTP 500) before reaching the upstream. Small
-    # requests skip compaction, which is why the failure only showed up under
-    # real agent workloads.
+    # generic "openai" / "anthropic" adapters (litellm_params.model =
+    # "openai/mimo-v2.6-pro", "openai/responses/deepseek-v4.1-flash",
+    # "anthropic/minimax-m2.7", ...) and those keys are not in the map - so any
+    # request large enough to arm compaction on an OpenCode Go tier failed with
+    # ModelNotMappedError (HTTP 500) before reaching the upstream. Small requests
+    # skip compaction, which is why the failure only showed up under real agent
+    # workloads.
     #
-    # register_model() is LiteLLM's supported way to add entries; by default it
-    # also replays them after the cost map is refreshed at runtime. The values
-    # are transcribed from the built-in map entries for the underlying models
-    # (xiaomi_mimo/mimo-v2.6-*, zai/glm-*), which publish the same limits.
+    # OpencodeModelRegistration.async_pre_call_hook registers every opencode.ai
+    # deployment under its own model string, from the deployment's own model_info:
+    # the model-sync CronJob keeps max_input_tokens/max_output_tokens there (see
+    # model-sync.yaml), so nothing is transcribed by hand, a new model needs no
+    # edit here, and a re-windowed model is corrected on the next request. Pre-call
+    # runs before routing, so the compaction budget that follows always finds its
+    # key. Entries this callback registered are refreshed; built-in cost-map
+    # entries are never overwritten, and a deployment that has no limits yet is
+    # left alone rather than given a synthetic entry.
     #
-    # When a new model joins an auto-router tier, its provider model string
-    # (litellm_params.model) must be registered here too, or large requests
-    # routed to that tier fail with ModelNotMappedError again. Note that the
-    # model-sync registrations put Responses API models behind a
-    # "responses/" prefix, so e.g. routing/glm-5.3-flash resolves to the key
-    # "openai/responses/glm-5.3-flash", not "openai/glm-5.3-flash".
-    OPENCODE_MODEL_COST = {
-        "openai/mimo-v2.6-flash": {
-            "max_tokens": 131072,
-            "max_input_tokens": 1048576,
-            "max_output_tokens": 131072,
-            "input_cost_per_token": 1.4e-07,
-            "output_cost_per_token": 2.8e-07,
-            "cache_read_input_token_cost": 2.8e-09,
-            "litellm_provider": "openai",
-            "mode": "chat",
-        },
-        "openai/mimo-v2.6-pro": {
-            "max_tokens": 131072,
-            "max_input_tokens": 1048576,
-            "max_output_tokens": 131072,
-            "input_cost_per_token": 4.35e-07,
-            "output_cost_per_token": 8.7e-07,
-            "cache_read_input_token_cost": 3.6e-09,
-            "litellm_provider": "openai",
-            "mode": "chat",
-        },
-        "openai/glm-5.3-flash": {
-            "max_input_tokens": 1048576,
-            "max_output_tokens": 128000,
-            "input_cost_per_token": 1.5e-07,
-            "output_cost_per_token": 5.0e-07,
-            "cache_read_input_token_cost": 3.0e-08,
-            "litellm_provider": "openai",
-            "mode": "chat",
-        },
-        "openai/responses/glm-5.3-flash": {
-            "max_input_tokens": 1048576,
-            "max_output_tokens": 128000,
-            "input_cost_per_token": 1.5e-07,
-            "output_cost_per_token": 5.0e-07,
-            "cache_read_input_token_cost": 3.0e-08,
-            "litellm_provider": "openai",
-            "mode": "chat",
-        },
-        "openai/glm-5.3": {
-            "max_input_tokens": 1000000,
-            "max_output_tokens": 128000,
-            "input_cost_per_token": 1.4e-06,
-            "output_cost_per_token": 4.4e-06,
-            "cache_read_input_token_cost": 2.6e-07,
-            "litellm_provider": "openai",
-            "mode": "chat",
-        },
-        "openai/responses/glm-5.3": {
-            "max_input_tokens": 1000000,
-            "max_output_tokens": 128000,
-            "input_cost_per_token": 1.4e-06,
-            "output_cost_per_token": 4.4e-06,
-            "cache_read_input_token_cost": 2.6e-07,
-            "litellm_provider": "openai",
-            "mode": "chat",
-        },
-    }
+    # The entry deliberately carries no "mode". A cost-map entry with one stops
+    # litellm.main.responses_api_bridge_check from normalizing the "responses/"
+    # bridge prefix (it only strips the prefix while the entry's mode is unset),
+    # so a registered "mode": "chat" on an "openai/responses/<id>" key makes the
+    # proxy send model="responses/<id>" to the chat endpoint. Leaving mode unset
+    # keeps prefixed and unprefixed keys behaving exactly as they did while
+    # unregistered.
+    OPENCODE_HOST = "opencode.ai"
 
 
-    def register_opencode_models() -> None:
-        missing = {
-            key: entry
-            for key, entry in OPENCODE_MODEL_COST.items()
-            if key not in litellm.model_cost
-        }
-        if missing:
-            litellm.register_model(model_cost=missing)
+    # Keys this callback put in the cost map, so only those get refreshed and no
+    # built-in entry is shadowed.
+    _registered_keys: set = set()
 
 
-    register_opencode_models()
+    def _is_opencode_api_base(api_base) -> bool:
+        host = (urlparse(str(api_base or "")).hostname or "").lower()
+        return host == OPENCODE_HOST or host.endswith("." + OPENCODE_HOST)
+
+
+    def _positive_int(value) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+    def _as_dict(value) -> dict:
+        """A deployment's model_info / litellm_params as a plain dict."""
+        if isinstance(value, dict):
+            return value
+        dump = getattr(value, "model_dump", None)
+        return dump() if callable(dump) else {}
+
+
+    def _limit_entry(model_info: dict):
+        """The cost-map limits for one deployment, or None when it has none yet."""
+        window = model_info.get("max_input_tokens")
+        if not _positive_int(window):
+            return None
+        entry = {"max_input_tokens": window}
+        output = model_info.get("max_output_tokens")
+        if _positive_int(output):
+            # max_tokens is LiteLLM's default output allowance; the deployments
+            # only carry max_output_tokens, so mirror it.
+            entry["max_output_tokens"] = output
+            entry["max_tokens"] = output
+        return entry
+
+
+    def _entry_current(entry: dict, current: dict) -> bool:
+        """True when the cost map already carries everything the entry would set."""
+        return all(current.get(field) == value for field, value in entry.items())
+
+
+    def register_from_router() -> None:
+        """Register every OpenCode Go deployment under its own model string.
+
+        Failures are swallowed by the caller: a skipped registration only costs
+        the compaction budget, while an exception would fail the request.
+        """
+        from litellm.proxy import proxy_server
+
+        router = getattr(proxy_server, "llm_router", None)
+        if router is None:
+            return
+        for deployment in getattr(router, "model_list", None) or ():
+            if not isinstance(deployment, dict):
+                continue
+            params = _as_dict(deployment.get("litellm_params"))
+            if not _is_opencode_api_base(params.get("api_base")):
+                continue
+            model = params.get("model")
+            if not isinstance(model, str) or not model:
+                continue
+            entry = _limit_entry(_as_dict(deployment.get("model_info")))
+            if entry is None:
+                continue
+            current = litellm.model_cost.get(model)
+            if current is not None:
+                if model not in _registered_keys:
+                    # A built-in entry (or another callback's) stays authoritative.
+                    continue
+                if _entry_current(entry, current):
+                    continue
+            litellm.register_model(model_cost={model: entry})
+            _registered_keys.add(model)
 
 
     class OpencodeModelRegistration(CustomLogger):
-        """No-op callback; the import-time registration above is the purpose."""
+        """Register OpenCode Go deployments with the cost map before routing.
+
+        See the module comment for why this is a pre-call hook over the router's
+        deployments rather than an import-time table: the table could only cover
+        models that were transcribed by hand, and copying a deployment's "mode"
+        into the cost map breaks the Responses bridge.
+        """
+
+        async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
+            try:
+                register_from_router()
+            except Exception as error:  # noqa: BLE001
+                print(f"opencode_models: cost-map registration skipped: {error}", flush=True)
+            return data
 
 
     opencode_models_handler = OpencodeModelRegistration()
