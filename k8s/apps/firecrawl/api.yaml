@@ -45,11 +45,11 @@ spec:
                 name: firecrawl-secret
           resources:
             requests:
-              memory: "4G"
-              cpu: "2000m"
+              memory: "512G"
+              cpu: "10m"
             limits:
-              memory: "6G"
-              cpu: "2000m"
+              memory: "3G"
+              cpu: "512m"
           livenessProbe:
             httpGet:
               path: /v0/health/liveness
