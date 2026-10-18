@@ -3,7 +3,7 @@ kind: Kustomization
 
 resources:
   - auto-manual-generation-system
-  - auto-manual-whisper
+  # - auto-manual-whisper
   - hello-world
   - dawarich
   - firecrawl
