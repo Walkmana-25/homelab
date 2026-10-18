@@ -52,7 +52,7 @@ spec:
           - headroom-proxy-token
 
         # ── Custom callback ────────────────────────────────────
-        # Routing filter hook (see callbacks.yaml) that supplies
+        # Per-deployment pre-call hook (see callbacks.yaml) that supplies
         # x-opencode-session on OpenCode Go deployments - the client's own value
         # when it sent one, a fallback otherwise. Mounted next to the config
         # file so litellm_settings.callbacks can resolve it.
@@ -271,13 +271,12 @@ spec:
             user_url_allowed_hosts:
               - litellm.litellm.svc.cluster.local
             # opencode_session_handler supplies x-opencode-session on OpenCode Go
-            # deployments (see callbacks.yaml). It runs as a routing filter, once
-            # the tier-resolved model's candidate deployments are known, and adds
-            # the header only when every candidate points at OpenCode Go - so
-            # retries, fallback steps and alias / auto-router tiers that land on
-            # OpenCode Go are covered, while z.ai / INIAD never receive the
-            # header. The client's own per-conversation id wins when it sent one;
-            # the static fallback only rescues clients that send none.
+            # deployments (see callbacks.yaml). It runs per selected deployment,
+            # so mixed priority groups (z.ai -> OpenCode Go) and auto-router
+            # fallbacks receive the header only on the OpenCode attempt, while
+            # z.ai / INIAD never receive it. The client's own per-conversation
+            # id wins when it sent one; the static fallback only rescues clients
+            # that send none.
             # compact_search bounds the payload of /v1/search (results above),
             # which also keeps the MCP web_search tool's response small.
             # opencode_models_handler mirrors each OpenCode Go deployment's context
@@ -299,7 +298,7 @@ spec:
             # auto-router groups here would also send client headers to whatever
             # other providers those groups can route to. Requests arriving under
             # such group names re-read the client header via proxy_server_request
-            # in the routing filter hook instead (see callbacks.yaml).
+            # in the per-deployment hook instead (see callbacks.yaml).
             model_group_settings:
               forward_client_headers_to_llm_api:
                 - opencode-go/*
