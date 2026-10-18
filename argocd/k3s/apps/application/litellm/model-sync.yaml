@@ -29,7 +29,10 @@
 # /v1/models and /model/info read a deployment's limits from (/model/info gives a
 # deployment's own model_info precedence over cost-map values). Gaps models.dev
 # does not cover (e.g. opencode-go/omen-alpha) are filled in /scripts/limits.json,
-# which uses the same models.dev key names and wins over the catalog.
+# which uses the same models.dev key names and wins over the catalog. Limits can
+# also come from a different models.dev provider than prices
+# ("limits_catalog_provider"): INIAD serves OpenAI model ids but is not billed by
+# OpenAI, so its models take OpenAI's published windows and stay unpriced.
 #
 # Each provider declares the LiteLLM model "mode". INIAD's OpenAI endpoint is called
 # through the Responses API (/api/v1/responses), so its models use mode "responses":
@@ -69,7 +72,9 @@ data:
     # the api_base for chat, the /models listing URL (None when unsupported), the
     # env var holding the API key, the LiteLLM model "mode" and the models.dev
     # provider key used to look up per-model pricing AND context limits
-    # ("catalog_provider").
+    # ("catalog_provider"). A provider that serves another vendor's model ids
+    # but is not billed by that vendor sets "limits_catalog_provider" instead:
+    # limits are imported, prices stay unset (see iniad).
     #
     # "mode" is a fixed protocol ("chat" / "responses") or "auto": with "auto" the
     # protocol is probed per model, preferring the Responses API (see deployment_for).
@@ -96,6 +101,12 @@ data:
             "key_env": "INIAD_API_KEY",
             # Call INIAD's OpenAI models through the Responses API.
             "mode": "responses",
+            # INIAD serves OpenAI model ids (gpt-5.4, ...) but is not a
+            # models.dev provider. Limits come from OpenAI's published entries
+            # for the same ids; prices stay unset, since the endpoint is not
+            # billed by OpenAI. Ids OpenAI does not publish (aurora-*, ...)
+            # get no limits.
+            "limits_catalog_provider": "openai",
         },
         {
             # INIAD Claude is Anthropic-native and has no /models endpoint, so its
@@ -278,6 +289,11 @@ data:
         publishes only one of the two keeps an empty dict for the other. Both
         values are None when the catalog is unreachable, so the run degrades to
         the override files instead of dropping prices or limits.
+
+        Prices are read from the provider's "catalog_provider". Limits may be
+        read from another models.dev provider ("limits_catalog_provider") for
+        endpoints that serve a vendor's models without being billed by that
+        vendor (iniad): limits are the models', prices are not.
         """
         request = urllib.request.Request(
             CATALOG_URL,
@@ -289,20 +305,26 @@ data:
         except Exception as error:  # noqa: BLE001
             print(f"catalog unavailable (models.dev): {error}", flush=True)
             return None, None
+
+        def block(key):
+            return (catalog.get(key) or {}).get("models") if key else None
+
         costs, limits = {}, {}
         for provider in PROVIDERS:
-            key = provider.get("catalog_provider")
-            models = (catalog.get(key) or {}).get("models") if key else None
-            if not models:
-                continue
-            costs[provider["prefix"]] = {
-                model_id: (entry.get("cost") or {})
-                for model_id, entry in models.items()
-            }
-            limits[provider["prefix"]] = {
-                model_id: (entry.get("limit") or {})
-                for model_id, entry in models.items()
-            }
+            models = block(provider.get("catalog_provider"))
+            if models:
+                costs[provider["prefix"]] = {
+                    model_id: (entry.get("cost") or {})
+                    for model_id, entry in models.items()
+                }
+            limit_models = block(
+                provider.get("limits_catalog_provider") or provider.get("catalog_provider")
+            )
+            if limit_models:
+                limits[provider["prefix"]] = {
+                    model_id: (entry.get("limit") or {})
+                    for model_id, entry in limit_models.items()
+                }
         return costs, limits
 
 
@@ -580,8 +602,12 @@ data:
   # ("context", "input", "output" - "input" wins over "context" when both are
   # set). Only models missing from the provider's models.dev catalog need an
   # entry; an absent model keeps whatever limits it already has (no synthetic
-  # value is invented, so clients fall back to their own default). Example:
-  #   { "opencode-go/grok-4.6": { "context": 500000, "output": 500000 } }
+  # value is invented, so clients fall back to their own default).
+  # opencode-go/omen-alpha is the exception: nothing publishes its window (not
+  # models.dev, not OpenCode's own catalog), so it is pinned to the value
+  # clients already assumed rather than left absent. Absent would keep the
+  # auto-router's compaction budget from resolving the model at all, which
+  # fails the request instead of compacting it.
   limits.json: |
     {
       "opencode-go/glm-5.1": {
@@ -599,6 +625,10 @@ data:
       "opencode-go/minimax-m2.5": {
         "context": 204800,
         "output": 131072
+      },
+      "opencode-go/omen-alpha": {
+        "context": 200000,
+        "output": 65536
       },
       "opencode-go/qwen3.6-plus": {
         "context": 262144,
