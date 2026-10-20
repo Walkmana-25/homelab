@@ -1,2 +1,7 @@
-ansible
-ansible-lint
+# Version ranges are pinned so CI stays reproducible.
+# ansible-core 2.21.x supports controller Python 3.12-3.14 only.
+# Python 3.15 requires ansible-core >= 2.22 (GA 2026-11-02);
+# keep this in sync with the python-version pin in .github/workflows/ansible-check.yml.
+ansible>=14.5.0,<15.0.0
+ansible-core>=2.21.5,<2.22.0
+ansible-lint>=26.10.1,<27.0.0

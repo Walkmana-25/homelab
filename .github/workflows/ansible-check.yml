@@ -26,6 +26,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6.3.0
         with:
+          # Keep <= 3.14 while ansible-core is pinned to 2.21.x: ansible-core < 2.22
+          # does not support Python 3.15 (dataclasses._is_type removal). See docs/repository-guide.md.
           python-version: '3.14'
           cache: 'pip'
           cache-dependency-path: ansible/requirements.txt
@@ -39,6 +41,13 @@ jobs:
       - name: Install Ansible collections
         working-directory: ansible
         run: make install-requirements
+
+      - name: Verify Python and Ansible versions
+        working-directory: ansible
+        run: |
+          python -V
+          ansible --version
+          ansible-lint --version
 
       - name: Run Ansible Lint and Syntax Check
         working-directory: ansible

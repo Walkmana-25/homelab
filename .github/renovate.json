@@ -45,6 +45,13 @@
   ],
   "packageRules": [
     {
+      "description": "Keep CI Python within the range supported by the pinned ansible-core (ansible-core < 2.22 supports Python <= 3.14)",
+      "matchManagers": ["github-actions"],
+      "matchDepNames": ["python"],
+      "matchUpdateTypes": ["minor", "major"],
+      "enabled": false
+    },
+    {
       "matchPackageNames": [
         "https://github.com/piraeusdatastore/piraeus-operator.git",
         "piraeus"

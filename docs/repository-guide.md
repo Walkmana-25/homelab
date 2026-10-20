@@ -53,6 +53,13 @@ This target runs yamllint, builds every kustomize overlay, and validates rendere
 
 CI runs the Ansible sequence and Argo CD checks on pushes to `main` and pull requests.
 
+### Python and Ansible version constraints
+
+- CI pins Python 3.14 in `.github/workflows/ansible-check.yml` and logs the runtime with `python -V`, `ansible --version`, and `ansible-lint --version`.
+- `ansible/requirements.txt` pins `ansible-core` to the 2.21.x line; local and devcontainer environments install Ansible from the distribution packages and are therefore not covered by this pin.
+- ansible-core < 2.22 does not support Python 3.15: on CPython 3.15, `dataclasses._is_type` was removed, so Ansible crashes with `AttributeError: module 'dataclasses' has no attribute '_is_type'` (ansible/ansible#87677).
+- Upgrading CI to Python 3.15 therefore requires ansible-core >= 2.22 (GA 2026-11-02), a matching bump of the pin in `ansible/requirements.txt`, and removing the `python` rule in `.github/renovate.json`.
+
 ## Provisioning Workflow
 
 Key Ansible commands must be run from `ansible/`:
