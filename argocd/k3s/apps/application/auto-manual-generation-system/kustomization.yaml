@@ -4,5 +4,4 @@ resources:
   - namespace.yaml
   - repo-secret.yaml
   - credentials.yaml
-  - uploads-pvc.yaml
   - application.yaml

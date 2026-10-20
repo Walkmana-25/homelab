@@ -60,7 +60,9 @@ spec:
           env:
             APP_ENV: production
             CORS_ORIGINS: '["https://manual.lapis-dev.work"]'
-            UPLOAD_DIR: /tmp/uploads
+            # Must match api.persistence.mountPath below, otherwise uploads
+            # still land on the ephemeral /tmp emptyDir.
+            UPLOAD_DIR: /app/storage/uploads
             # Whisper via the in-cluster LiteLLM gateway (backed by OpenRouter
             # openai/whisper-large-v3-turbo). WHISPER_API_KEY is the LiteLLM
             # master key, provided by the sealed api-env secret. The app first
@@ -68,6 +70,24 @@ spec:
             # requires.
             WHISPER_BASE_URL: http://litellm.litellm.svc.cluster.local:4000/v1
             WHISPER_MODEL: openai/whisper-large-v3-turbo
+          persistence:
+            # Uploaded audio and wiki source files are persisted instead of
+            # living on the ephemeral /tmp emptyDir. The chart owns the PVC
+            # ("auto-manual-api-uploads") and mounts it at mountPath, which is
+            # why UPLOAD_DIR above must match it.
+            #
+            # nfs (nfs-subdir-external-provisioner) is used because uploads are
+            # shared and must survive a rolling update that surges a second API
+            # pod on another node; ReadWriteMany matches what NFS actually
+            # provides. The provisioner creates the export subdirectory 0777,
+            # so the non-root API user (uid 10001) can write without fsGroup
+            # (which Kubernetes does not apply to NFS).
+            enabled: true
+            storageClass: nfs
+            accessModes:
+              - ReadWriteMany
+            size: 5Gi
+            mountPath: /app/storage/uploads
           database:
             # SealedSecret with DATABASE_URL / QDRANT_URL + app config (envFrom).
             existingSecret: auto-manual-api-env
