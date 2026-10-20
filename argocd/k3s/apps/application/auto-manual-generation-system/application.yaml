@@ -41,6 +41,14 @@ spec:
     targetRevision: main
     helm:
       values: |
+        # Image availability workaround: the Harbor project that hosted these
+        # images ("apps") is gone from Harbor's database, so every pull from
+        # harbor-k3s.lapis-dev.work returns 401 and the sealed robot credential
+        # (registry-sealed) cannot be validated either. The three image layers
+        # that still work are the ones cached in k3s-worker-a's containerd,
+        # hence the per-component nodeSelector below. Remove the nodeSelectors
+        # and re-enable api.migrations once the images are pushed back to
+        # Harbor (or loaded into every node's containerd).
         global:
           fullnameOverride: auto-manual
           imagePullSecrets:
@@ -51,12 +59,24 @@ spec:
             repository: harbor-k3s.lapis-dev.work/apps/auto-manual-front
             tag: latest
             pullPolicy: IfNotPresent
+          nodeSelector:
+            kubernetes.io/hostname: k3s-worker-a
 
         api:
           image:
             repository: harbor-k3s.lapis-dev.work/apps/auto-manual-api
             tag: latest
             pullPolicy: IfNotPresent
+          nodeSelector:
+            kubernetes.io/hostname: k3s-worker-a
+          migrations:
+            # The chart's migration Job has no nodeSelector hook, so it can be
+            # scheduled on a node without the API image and fail with
+            # ErrImagePull, stalling the sync. Run it manually after rollout:
+            #   kubectl -n auto-manual exec deploy/auto-manual-api -- \
+            #     .venv/bin/alembic upgrade head
+            # Re-enable this once the API image is available on every node.
+            enabled: false
           env:
             APP_ENV: production
             CORS_ORIGINS: '["https://manual.lapis-dev.work"]'
@@ -97,6 +117,8 @@ spec:
             repository: harbor-k3s.lapis-dev.work/apps/auto-manual-agent
             tag: latest
             pullPolicy: IfNotPresent
+          nodeSelector:
+            kubernetes.io/hostname: k3s-worker-a
           env:
             OPENAI_MODEL: iniad/gpt-6-luna
           # SealedSecret with OPENAI_* (all AI via LiteLLM).
