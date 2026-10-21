@@ -16,7 +16,8 @@ resources:
   - technitium-sd
   - grafana
   - headlamp
-  - harbor
+  # VMベースの基幹インフラとして移行しました。
+  #  - harbor
   - argocd-ingress
   - loki
   - fluent-bit
