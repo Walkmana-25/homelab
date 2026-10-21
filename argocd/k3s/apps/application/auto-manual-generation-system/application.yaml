@@ -48,18 +48,16 @@ spec:
         global:
           fullnameOverride: auto-manual
           imagePullSecrets:
-            - name: registry-sealed
+            - name: regcred
 
         frontend:
           image:
-            repository: harbor-k3s.lapis-dev.work/apps/auto-manual-front
-            tag: 92f02b7
+            repository: harbor.lapis-dev.work/private/front:latest
             pullPolicy: IfNotPresent
 
         api:
           image:
-            repository: harbor-k3s.lapis-dev.work/apps/auto-manual-api
-            tag: 92f02b7
+            repository: harbor.lapis-dev.work/private/api:latest
             pullPolicy: IfNotPresent
           env:
             APP_ENV: production
@@ -98,8 +96,7 @@ spec:
 
         agent:
           image:
-            repository: harbor-k3s.lapis-dev.work/apps/auto-manual-agent
-            tag: 92f02b7
+            repository: harbor.lapis-dev.work/private/agent:latest
             pullPolicy: IfNotPresent
           env:
             OPENAI_MODEL: iniad/gpt-6-luna
