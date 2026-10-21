@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - sealed-secrets
+  - reflector
   - cloudnative-pg
   - cert-manager
   - metallb

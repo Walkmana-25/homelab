@@ -27,7 +27,7 @@ The two Argo CD umbrella Applications are:
 - `argocd/k3s/application-infrastructure.yaml` → `argocd/k3s/apps/infrastructure/`
 - `argocd/k3s/application-application.yaml` → `argocd/k3s/apps/application/`
 
-Infrastructure includes cert-manager, MetalLB, Longhorn, Piraeus/LINSTOR, sealed-secrets, Fluent Bit, Loki, Grafana, VictoriaMetrics, Harbor, and supporting controllers. Application overlays include services such as LibreChat, LiteLLM, SearXNG, Firecrawl, Headroom, MCP proxy, and Dawarich.
+Infrastructure includes cert-manager, MetalLB, Longhorn, Piraeus/LINSTOR, sealed-secrets, Reflector, Fluent Bit, Loki, Grafana, VictoriaMetrics, Harbor, and supporting controllers. Application overlays include services such as LibreChat, LiteLLM, SearXNG, Firecrawl, Headroom, MCP proxy, and Dawarich.
 
 ## Development and Validation
 
