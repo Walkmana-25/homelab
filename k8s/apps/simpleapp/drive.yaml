@@ -19,7 +19,7 @@ spec:
             fsGroup: 1000
           containers:
           - name: drive
-            image: harbor-k3s.lapis-dev.work/apps/driving-school-bot:latest
+            image: harbor.lapis-dev.work/private/driving-schrool-reserve-bot:latest
             imagePullPolicy: IfNotPresent
             env:
             - name: STATE_FILE
