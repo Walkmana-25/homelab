@@ -52,12 +52,12 @@ spec:
 
         frontend:
           image:
-            repository: harbor.lapis-dev.work/private/front:latest
+            repository: harbor.lapis-dev.work/private/front
             pullPolicy: IfNotPresent
 
         api:
           image:
-            repository: harbor.lapis-dev.work/private/api:latest
+            repository: harbor.lapis-dev.work/private/api
             pullPolicy: IfNotPresent
           env:
             APP_ENV: production
@@ -96,7 +96,7 @@ spec:
 
         agent:
           image:
-            repository: harbor.lapis-dev.work/private/agent:latest
+            repository: harbor.lapis-dev.work/private/agent
             pullPolicy: IfNotPresent
           env:
             OPENAI_MODEL: iniad/gpt-6-luna
