@@ -21,3 +21,4 @@ resources:
   - loki
   - fluent-bit
   - piraeus
+  - encrypt_regcred.yaml
