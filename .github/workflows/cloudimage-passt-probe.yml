@@ -30,7 +30,7 @@ jobs:
       LIBGUESTFS_TRACE: 1
 
     steps:
-      - uses: actions/checkout@v6.1.0
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event.inputs.ref || github.ref }}
 

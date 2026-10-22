@@ -19,12 +19,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6.1.0
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event.inputs.ref || github.ref }}
 
       - name: Set up Python
-        uses: actions/setup-python@v6.3.0
+        uses: actions/setup-python@v7.1.0
         with:
           # Keep <= 3.14 while ansible-core is pinned to 2.21.x: ansible-core < 2.22
           # does not support Python 3.15 (dataclasses._is_type removal). See docs/repository-guide.md.
