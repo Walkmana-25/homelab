@@ -20,7 +20,7 @@ spec:
     # artifact is pulled from ghcr.io/berriai/litellm-helm.
     repoURL: ghcr.io/berriai
     chart: litellm-helm
-    targetRevision: 1.105.0
+    targetRevision: 1.106.2
     helm:
       values: |
         replicaCount: 1
