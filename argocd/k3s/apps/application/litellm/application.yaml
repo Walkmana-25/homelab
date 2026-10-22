@@ -28,7 +28,7 @@ spec:
         image:
           repository: ghcr.io/berriai/litellm
           pullPolicy: IfNotPresent
-          tag: "v1.105.0"
+          tag: ""
 
         # ── Public origin ──────────────────────────────────────
         # LiteLLM runs behind the cloudflare-tunnel ingress, which terminates
