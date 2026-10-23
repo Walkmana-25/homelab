@@ -279,13 +279,17 @@ spec:
             # that send none.
             # compact_search bounds the payload of /v1/search (results above),
             # which also keeps the MCP web_search tool's response small.
-            # opencode_models_handler mirrors each OpenCode Go deployment's context
-            # limits into the model cost map on every request (pre-call, read off
-            # the router), so the auto-router's context compaction resolves tier
-            # model limits instead of failing with ModelNotMappedError on large
-            # requests. The limits come from the deployment's own model_info,
-            # which the model-sync CronJob keeps filled from models.dev, so a new
-            # or re-windowed model needs no code change (see callbacks.yaml).
+            # opencode_models_handler mirrors each gateway deployment's
+            # (OpenCode Go, z.ai, INIAD) context limits into the model cost map
+            # on every request (pre-call, read off the router), so the
+            # auto-router's context compaction resolves tier model limits instead
+            # of failing with ModelNotMappedError on large requests. z.ai and
+            # INIAD deployments are spelled "openai/responses/<id>", which the
+            # built-in cost map does not carry at all - that is the key MEDIUM
+            # requests were missing. The limits come from the deployment's own
+            # model_info, which the model-sync CronJob keeps filled from
+            # models.dev, so a new or re-windowed model needs no code change (see
+            # callbacks.yaml).
             callbacks:
               - callbacks.opencode_session.opencode_session_handler
               - callbacks.opencode_models.opencode_models_handler

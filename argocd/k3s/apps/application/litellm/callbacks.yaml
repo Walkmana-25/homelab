@@ -5,9 +5,9 @@
 #
 # - opencode_session.py: x-opencode-session on OpenCode Go deployments only
 #   (chosen by destination, client value preferred over a static fallback).
-# - opencode_models.py: mirror the OpenCode Go deployments' context limits into
-#   LiteLLM's model cost map (pre-call, read off the router) so the auto-router's
-#   context compaction can resolve them.
+# - opencode_models.py: mirror the gateway deployments' (OpenCode Go, z.ai,
+#   INIAD) context limits into LiteLLM's model cost map (pre-call, read off the
+#   router) so the auto-router's context compaction can resolve them.
 # - compact_search.py: bound the payload of provider-hosted search results.
 apiVersion: v1
 kind: ConfigMap
@@ -135,24 +135,24 @@ data:
 
     opencode_session_handler = OpenCodeSessionFallback()
   opencode_models.py: |
-    from urllib.parse import urlparse
-
     import litellm
 
     from litellm.integrations.custom_logger import CustomLogger
 
     # The complexity auto-router's context compaction resolves the tier model's
     # context window through litellm.get_model_info(), which only consults the
-    # built-in model cost map. OpenCode Go deployments are registered under the
-    # generic "openai" / "anthropic" adapters (litellm_params.model =
-    # "openai/mimo-v2.6-pro", "openai/responses/deepseek-v4.1-flash",
-    # "anthropic/minimax-m2.7", ...) and those keys are not in the map - so any
-    # request large enough to arm compaction on an OpenCode Go tier failed with
-    # ModelNotMappedError (HTTP 500) before reaching the upstream. Small requests
-    # skip compaction, which is why the failure only showed up under real agent
-    # workloads.
+    # built-in model cost map. Every gateway deployment this proxy registers by
+    # hand - OpenCode Go, z.ai and INIAD - uses a generic adapter
+    # (litellm_params.model = "openai/mimo-v2.6-pro",
+    # "openai/responses/deepseek-v4.1-flash", "anthropic/minimax-m2.7", ...) and
+    # those keys are not in the map. Responses deployments are spelled
+    # "openai/responses/<id>" (see model-sync.yaml), a form the built-in map does
+    # not carry at all - which is why a MEDIUM auto-router request that resolved
+    # to a z.ai tier failed with ModelNotMappedError (HTTP 500) and fell back to
+    # deepseek before reaching the upstream. Small requests skip compaction,
+    # which is why the failure only showed up under real agent workloads.
     #
-    # OpencodeModelRegistration.async_pre_call_hook registers every opencode.ai
+    # OpencodeModelRegistration.async_pre_call_hook registers every gateway
     # deployment under its own model string, from the deployment's own model_info:
     # the model-sync CronJob keeps max_input_tokens/max_output_tokens there (see
     # model-sync.yaml), so nothing is transcribed by hand, a new model needs no
@@ -162,6 +162,9 @@ data:
     # entries are never overwritten, and a deployment that has no limits yet is
     # left alone rather than given a synthetic entry.
     #
+    # The module and class names are historical: they predate z.ai / INIAD
+    # support and stay because application.yaml references the handler by name.
+    #
     # The entry deliberately carries no "mode". A cost-map entry with one stops
     # litellm.main.responses_api_bridge_check from normalizing the "responses/"
     # bridge prefix (it only strips the prefix while the entry's mode is unset),
@@ -169,17 +172,15 @@ data:
     # proxy send model="responses/<id>" to the chat endpoint. Leaving mode unset
     # keeps prefixed and unprefixed keys behaving exactly as they did while
     # unregistered.
-    OPENCODE_HOST = "opencode.ai"
+    # Adapters used by the OpenAI-compatible gateways this proxy registers by
+    # hand (OpenCode Go, z.ai, INIAD). azure/bedrock are excluded: their
+    # litellm_params.model is a deployment name, not a cost-map key.
+    GATEWAY_PREFIXES = ("openai/", "anthropic/")
 
 
     # Keys this callback put in the cost map, so only those get refreshed and no
     # built-in entry is shadowed.
     _registered_keys: set = set()
-
-
-    def _is_opencode_api_base(api_base) -> bool:
-        host = (urlparse(str(api_base or "")).hostname or "").lower()
-        return host == OPENCODE_HOST or host.endswith("." + OPENCODE_HOST)
 
 
     def _positive_int(value) -> bool:
@@ -215,7 +216,7 @@ data:
 
 
     def register_from_router() -> None:
-        """Register every OpenCode Go deployment under its own model string.
+        """Register every gateway deployment under its own model string.
 
         Failures are swallowed by the caller: a skipped registration only costs
         the compaction budget, while an exception would fail the request.
@@ -229,10 +230,8 @@ data:
             if not isinstance(deployment, dict):
                 continue
             params = _as_dict(deployment.get("litellm_params"))
-            if not _is_opencode_api_base(params.get("api_base")):
-                continue
             model = params.get("model")
-            if not isinstance(model, str) or not model:
+            if not isinstance(model, str) or not model.startswith(GATEWAY_PREFIXES):
                 continue
             entry = _limit_entry(_as_dict(deployment.get("model_info")))
             if entry is None:
@@ -249,12 +248,14 @@ data:
 
 
     class OpencodeModelRegistration(CustomLogger):
-        """Register OpenCode Go deployments with the cost map before routing.
+        """Register every gateway deployment with the cost map before routing.
 
-        See the module comment for why this is a pre-call hook over the router's
-        deployments rather than an import-time table: the table could only cover
-        models that were transcribed by hand, and copying a deployment's "mode"
-        into the cost map breaks the Responses bridge.
+        Covers OpenCode Go, z.ai and INIAD alike; the class name is historical
+        (see the module comment). See the module comment for why this is a
+        pre-call hook over the router's deployments rather than an import-time
+        table: the table could only cover models that were transcribed by hand,
+        and copying a deployment's "mode" into the cost map breaks the Responses
+        bridge.
         """
 
         async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
