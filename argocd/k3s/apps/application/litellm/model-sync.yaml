@@ -141,6 +141,21 @@ data:
             "key_env": "OPENCODE_API_KEY",
             "mode": "auto",
             "catalog_provider": "opencode-go",
+            # Models whose vendor has a built-in cost-map entry of its own
+            # ("zai/glm-5.3-flash", "zai/glm-5.1", ...). The vendor segment is
+            # carried in the LiteLLM model string ("openai/zai/glm-5.3-flash")
+            # so the string names the vendor and corresponds to that cost-map
+            # entry instead of an id the map does not know. LiteLLM does not
+            # resolve the nested key natively, so callbacks.yaml registers the
+            # alias and strips the vendor again before the upstream call (the
+            # gateway only accepts the bare model id). Only ids with a built-in
+            # vendor entry are listed - glm-5.2 has none. Keep this list in sync
+            # with the cost map of the pinned LiteLLM image.
+            "model_vendors": {
+                "glm-5.1": "zai",
+                "glm-5.3": "zai",
+                "glm-5.3-flash": "zai",
+            },
             "session_header": "x-opencode-session",
             "anthropic_api_base": "https://opencode.ai/inference/go",
             # Cloudflare in front of the gateway rejects the stock Python urllib
@@ -225,8 +240,22 @@ data:
         return "ModelProtocolUnsupported" not in body
 
 
-    def litellm_model_name(provider_name, model_id, mode):
+    def model_vendor(provider, model_id):
+        """The vendor segment to carry in this model's LiteLLM model string, if any."""
+        return (provider.get("model_vendors") or {}).get(model_id)
+
+
+    def litellm_model_name(provider_name, model_id, mode, vendor=None):
         """LiteLLM model string for one deployment.
+
+        A vendor-mapped model carries its vendor in the model string
+        ("openai/zai/glm-5.3-flash"), so the string names the vendor and
+        corresponds to that vendor's built-in cost-map entry
+        ("zai/glm-5.3-flash") rather than an id the map does not know. LiteLLM
+        resolves cost-map keys from the first segment, so the nested
+        "<adapter>/<vendor>/<id>" key is not built in: callbacks.yaml registers
+        the alias with the vendor's rates and strips the vendor again before the
+        upstream call, which accepts only the bare id.
 
         Responses-API deployments carry an explicit "responses/" segment. LiteLLM
         selects the /chat/completions -> /responses bridge from the model name
@@ -235,33 +264,36 @@ data:
         requests are sent to /chat/completions and the gateway rejects them with
         "Model does not support this protocol".
         """
+        name = f"{vendor}/{model_id}" if vendor else model_id
         if mode == "responses":
-            return f"{provider_name}/responses/{model_id}"
-        return f"{provider_name}/{model_id}"
+            return f"{provider_name}/responses/{name}"
+        return f"{provider_name}/{name}"
 
 
     def deployment_for(provider, model_id, session):
         """(litellm_model, api_base, mode) for one model, probing when mode is auto."""
         mode = provider.get("mode", "chat")
+        vendor = model_vendor(provider, model_id)
         if mode != "auto":
-            return litellm_model_name(provider["provider"], model_id, mode), provider["api_base"], mode
+            return litellm_model_name(provider["provider"], model_id, mode, vendor), provider["api_base"], mode
 
         # Prefer the Responses API, then chat completions, then Anthropic Messages.
         if provider_request(
             provider, "/responses",
             {"model": model_id, "input": "ping", "max_output_tokens": 16}, session,
         ):
-            return litellm_model_name("openai", model_id, "responses"), provider["api_base"], "responses"
+            return litellm_model_name("openai", model_id, "responses", vendor), provider["api_base"], "responses"
         if provider_request(
             provider, "/chat/completions",
             {"model": model_id, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 16}, session,
         ):
-            return litellm_model_name("openai", model_id, "chat"), provider["api_base"], "chat"
+            return litellm_model_name("openai", model_id, "chat", vendor), provider["api_base"], "chat"
         anthropic = {**provider, "api_base": provider["anthropic_api_base"]}
         if provider_request(
             anthropic, "/v1/messages",
             {"model": model_id, "max_tokens": 16, "messages": [{"role": "user", "content": "ping"}]}, session,
         ):
+            # The Messages API receives the model id directly, so no vendor segment.
             return litellm_model_name("anthropic", model_id, "chat"), provider["anthropic_api_base"], "chat"
         raise RuntimeError("no supported protocol")
 
@@ -491,6 +523,7 @@ data:
                 desired.add(name)
                 session = f"litellm-{provider['prefix']}-{model_id}"
                 current = existing.get(name)
+                vendor = model_vendor(provider, model_id)
                 cost = cost_fields(provider, model_id, catalog_costs, cost_overrides, catalog_ok)
                 limits = limit_fields(provider, model_id, catalog_limits, limit_overrides, catalog_ok)
                 bridge = wants_bridge(provider, mode, current)
@@ -500,10 +533,23 @@ data:
                     if sync_version is not None and current["sync_version"] != sync_version:
                         recreate = True
                     elif mode != "auto" and (
-                        current["model"] != litellm_model_name(provider["provider"], model_id, mode)
+                        current["model"] != litellm_model_name(provider["provider"], model_id, mode, vendor)
                         or current["mode"] != mode
                     ):
                         # A fixed-mode provider moved between adapters/protocols.
+                        recreate = True
+                    elif (
+                        mode == "auto"
+                        and vendor
+                        and str(current["model"]).startswith("openai/")
+                        and current["mode"] in ("chat", "responses")
+                        and current["model"]
+                        != litellm_model_name("openai", model_id, current["mode"], vendor)
+                    ):
+                        # The deployment's model string gained a vendor segment (or
+                        # predates it). Recreate just this deployment, keeping its
+                        # probed mode. Anthropic-probed deployments are left alone:
+                        # the vendor alias and the outbound strip are openai-only.
                         recreate = True
                     elif current["bridge"] != bridge:
                         # The responses-to-chat bridge was added or removed.

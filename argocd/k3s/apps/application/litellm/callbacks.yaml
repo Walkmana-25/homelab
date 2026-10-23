@@ -136,6 +136,7 @@ data:
     opencode_session_handler = OpenCodeSessionFallback()
   opencode_models.py: |
     import litellm
+    from urllib.parse import urlparse
 
     from litellm.integrations.custom_logger import CustomLogger
 
@@ -152,6 +153,18 @@ data:
     # deepseek before reaching the upstream. Small requests skip compaction,
     # which is why the failure only showed up under real agent workloads.
     #
+    # Gateway models whose vendor has a built-in cost-map entry of its own are
+    # spelled "<adapter>/<vendor>/<id>" instead ("openai/zai/glm-5.3-flash"), so
+    # the model string names the vendor and corresponds to that entry
+    # ("zai/glm-5.3-flash") rather than an id the map does not know. LiteLLM
+    # resolves cost-map keys from the first segment, so it does not resolve the
+    # nested key natively. This callback therefore (i) registers the deployment
+    # key with the vendor's cost rates copied from the built-in "<vendor>/<id>"
+    # entry, and (ii) strips the vendor segment again on the way out, because
+    # OpenCode Go accepts only the bare model id and answers "zai/glm-5.3-flash"
+    # with HTTP 400 "Model is unavailable". The strip is gated on the OpenCode
+    # api_base, so z.ai / INIAD keep their model strings untouched.
+    #
     # OpencodeModelRegistration.async_pre_call_hook registers every gateway
     # deployment under its own model string, from the deployment's own model_info:
     # the model-sync CronJob keeps max_input_tokens/max_output_tokens there (see
@@ -159,8 +172,8 @@ data:
     # edit here, and a re-windowed model is corrected on the next request. Pre-call
     # runs before routing, so the compaction budget that follows always finds its
     # key. Entries this callback registered are refreshed; built-in cost-map
-    # entries are never overwritten, and a deployment that has no limits yet is
-    # left alone rather than given a synthetic entry.
+    # entries are never overwritten, and a deployment that carries neither limits
+    # nor a vendor rate entry is left alone rather than given a synthetic entry.
     #
     # The module and class names are historical: they predate z.ai / INIAD
     # support and stay because application.yaml references the handler by name.
@@ -174,8 +187,15 @@ data:
     # unregistered.
     # Adapters used by the OpenAI-compatible gateways this proxy registers by
     # hand (OpenCode Go, z.ai, INIAD). azure/bedrock are excluded: their
-    # litellm_params.model is a deployment name, not a cost-map key.
+    # litellm_params.model is a deployment name, not a cost-map key. A model
+    # whose vendor has a built-in entry is spelled "<adapter>/<vendor>/<id>"
+    # ("openai/zai/glm-5.3-flash"), or "<adapter>/responses/<vendor>/<id>"
+    # ("openai/responses/zai/glm-5.3-flash") for the Responses bridge.
     GATEWAY_PREFIXES = ("openai/", "anthropic/")
+
+    # OpenCode Go's host. Only requests that go there get the vendor segment
+    # stripped (see _strip_vendor): the gateway knows its models by bare id.
+    OPENCODE_HOST = "opencode.ai"
 
 
     # Keys this callback put in the cost map, so only those get refreshed and no
@@ -195,6 +215,21 @@ data:
         return dump() if callable(dump) else {}
 
 
+    def _is_opencode_api_base(api_base) -> bool:
+        host = (urlparse(str(api_base or "")).hostname or "").lower()
+        return host == OPENCODE_HOST or host.endswith("." + OPENCODE_HOST)
+
+
+    def _api_base(kwargs):
+        api_base = kwargs.get("api_base")
+        if api_base:
+            return api_base
+        litellm_params = kwargs.get("litellm_params")
+        if isinstance(litellm_params, dict):
+            return litellm_params.get("api_base")
+        return getattr(litellm_params, "api_base", None)
+
+
     def _limit_entry(model_info: dict):
         """The cost-map limits for one deployment, or None when it has none yet."""
         window = model_info.get("max_input_tokens")
@@ -208,6 +243,64 @@ data:
             entry["max_output_tokens"] = output
             entry["max_tokens"] = output
         return entry
+
+
+    def _vendor_key(model):
+        """The built-in cost-map key this gateway model aliases, or None.
+
+        Gateway deployments are spelled "<adapter>/<vendor>/<id>" (or
+        "<adapter>/responses/<vendor>/<id>") so the model string names the model's
+        vendor. LiteLLM resolves cost-map keys from the first segment, so the
+        nested key is not built in; the vendor's own entry (e.g.
+        "zai/glm-5.3-flash") is the authority for its rates.
+        """
+        if not isinstance(model, str) or not model.startswith("openai/"):
+            return None
+        rest = model[len("openai/"):]
+        if rest.startswith("responses/"):
+            rest = rest[len("responses/"):]
+        if "/" not in rest:
+            return None
+        vendor, remainder = rest.split("/", 1)
+        key = f"{vendor}/{remainder}"
+        return key if key in litellm.model_cost else None
+
+
+    def _deployment_entry(model, model_info):
+        """Cost-map entry for one deployment: its limits plus the vendor's rates."""
+        entry = _limit_entry(model_info) or {}
+        key = _vendor_key(model)
+        if key is not None:
+            for name, value in (litellm.model_cost.get(key) or {}).items():
+                if "cost" in name and value is not None:
+                    entry.setdefault(name, value)
+        return entry or None
+
+
+    def _strip_vendor(model):
+        """Drop the vendor segment before the upstream call.
+
+        The vendor is part of the LiteLLM model string and its cost-map alias, but
+        the gateway's own model ids are unprefixed. Handles the full deployment
+        string and the intermediate forms the Responses bridge builds. Anthropic
+        deployments are left alone: their adapter model is already the bare id
+        (and a provider-named built-in key such as "anthropic/claude-..." must
+        not be mistaken for a vendor segment). The prefixes are ordered longest
+        first so "openai/responses/" is matched before "openai/".
+        """
+        if not isinstance(model, str) or model.startswith("anthropic/"):
+            return model
+        for prefix in ("openai/responses/", "openai/", "responses/", ""):
+            if not model.startswith(prefix):
+                continue
+            tail = model[len(prefix):]
+            if "/" not in tail:
+                return model
+            vendor, remainder = tail.split("/", 1)
+            if f"{vendor}/{remainder}" in litellm.model_cost:
+                return prefix + remainder
+            return model
+        return model
 
 
     def _entry_current(entry: dict, current: dict) -> bool:
@@ -233,29 +326,39 @@ data:
             model = params.get("model")
             if not isinstance(model, str) or not model.startswith(GATEWAY_PREFIXES):
                 continue
-            entry = _limit_entry(_as_dict(deployment.get("model_info")))
+            entry = _deployment_entry(model, _as_dict(deployment.get("model_info")))
             if entry is None:
                 continue
-            current = litellm.model_cost.get(model)
-            if current is not None:
-                if model not in _registered_keys:
-                    # A built-in entry (or another callback's) stays authoritative.
-                    continue
-                if _entry_current(entry, current):
-                    continue
-            litellm.register_model(model_cost={model: entry})
-            _registered_keys.add(model)
+            # The Responses bridge also looks the key up without its "responses/"
+            # segment (Router._backend_cost_map_keys), so register both.
+            keys = [model]
+            if model.startswith("openai/responses/"):
+                keys.append("openai/" + model[len("openai/responses/"):])
+            for key in keys:
+                current = litellm.model_cost.get(key)
+                if current is not None:
+                    if current.get("litellm_provider") and key not in _registered_keys:
+                        # A built-in entry (or another callback's) stays authoritative.
+                        # Router-created stubs carry no litellm_provider, so they can
+                        # be filled with the deployment's limits and the vendor rates.
+                        continue
+                    if key in _registered_keys and _entry_current(entry, current):
+                        continue
+                litellm.register_model(model_cost={key: entry})
+                _registered_keys.add(key)
 
 
     class OpencodeModelRegistration(CustomLogger):
         """Register every gateway deployment with the cost map before routing.
 
-        Covers OpenCode Go, z.ai and INIAD alike; the class name is historical
-        (see the module comment). See the module comment for why this is a
-        pre-call hook over the router's deployments rather than an import-time
-        table: the table could only cover models that were transcribed by hand,
-        and copying a deployment's "mode" into the cost map breaks the Responses
-        bridge.
+        Also strips the vendor segment ("openai/zai/glm-5.3-flash" ->
+        "openai/glm-5.3-flash") for OpenCode Go requests, which accept only the
+        bare model id. Covers OpenCode Go, z.ai and INIAD alike; the class name is
+        historical (see the module comment). See the module comment for why this
+        is a pre-call hook over the router's deployments rather than an
+        import-time table: the table could only cover models that were
+        transcribed by hand, and copying a deployment's "mode" into the cost map
+        breaks the Responses bridge.
         """
 
         async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
@@ -264,6 +367,16 @@ data:
             except Exception as error:  # noqa: BLE001
                 print(f"opencode_models: cost-map registration skipped: {error}", flush=True)
             return data
+
+        async def async_pre_call_deployment_hook(self, kwargs, call_type):
+            if not _is_opencode_api_base(_api_base(kwargs)):
+                return None
+            model = kwargs.get("model")
+            stripped = _strip_vendor(model)
+            if stripped != model:
+                kwargs["model"] = stripped
+                return kwargs
+            return None
 
 
     opencode_models_handler = OpencodeModelRegistration()
