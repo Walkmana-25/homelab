@@ -50,6 +50,13 @@
 # x-opencode-session header; the proxy supplies the client's own per routing
 # decision (see callbacks.yaml and model_group_settings in application.yaml)
 # rather than pinning a static one.
+#
+# INIAD Claude is Anthropic-native and its model listing API is unusable (400,
+# and 405 on POST), so its model ids are pinned in the provider entry instead of
+# discovered. INIAD endpoints are unstable, so a provider marked "probe" is
+# health-checked with a minimal completion request before a deployment is created
+# or recreated: a failure leaves the previous deployment - and the desired set
+# the prune pass works from - untouched, and the next run retries.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -62,6 +69,7 @@ data:
   sync.py: |
     import json
     import os
+    import time
     import urllib.error
     import urllib.request
 
@@ -78,6 +86,11 @@ data:
     #
     # "mode" is a fixed protocol ("chat" / "responses") or "auto": with "auto" the
     # protocol is probed per model, preferring the Responses API (see deployment_for).
+    #
+    # "models" pins the ids of a provider whose listing endpoint cannot be used
+    # (they then win over "models_url"). "probe" opts a provider into the
+    # pre-registration health check, which is a different thing from the protocol
+    # probing that "auto" does (see probe_model).
     PROVIDERS = [
         {
             # GLM Coding Plan. Its OpenAI Responses endpoint (api.z.ai/api/v1)
@@ -109,14 +122,26 @@ data:
             "limits_catalog_provider": "openai",
         },
         {
-            # INIAD Claude is Anthropic-native and has no /models endpoint, so its
-            # models are not listed here; call them as iniad-claude/<model>.
+            # INIAD Claude is Anthropic-native. Its model listing API answers 400
+            # for every request (405 on POST), so the ids are pinned here rather
+            # than discovered (models_url stays None). api_base stops at /api
+            # because LiteLLM appends /v1/messages itself - /api/v1 would post to
+            # /api/v1/v1/messages, which no drift field below would ever correct,
+            # hence sync_version to force a recreate if this shape changes. INIAD
+            # bills nothing, so prices stay unset while the context windows come
+            # from the published Anthropic entries for the same ids. The endpoint
+            # is unstable, so "probe" health-checks each model before it is
+            # registered.
             "prefix": "iniad-claude",
             "provider": "anthropic",
             "api_base": "https://api.anthropic.iniad.org/api",
             "models_url": None,
+            "models": ["claude-haiku-5-5", "claude-sonnet-5-5"],
             "key_env": "INIAD_API_KEY",
             "mode": "chat",
+            "limits_catalog_provider": "anthropic",
+            "probe": True,
+            "sync_version": 1,
         },
         {
             # OpenCode Go. Multi-protocol gateway, probed per model. The gateway
@@ -207,6 +232,9 @@ data:
 
 
     def discover_models(provider):
+        # A pinned list is used when the provider has no usable /models endpoint.
+        if provider.get("models"):
+            return list(provider["models"])
         if not provider["models_url"]:
             return []
         request = urllib.request.Request(
@@ -238,6 +266,77 @@ data:
             raise
         # Some gateways answer 200 with a protocol-unsupported error body.
         return "ModelProtocolUnsupported" not in body
+
+
+    # Minimal request body + path for the pre-registration health check, per adapter.
+    PROBE_REQUESTS = {
+        "anthropic": (
+            "/v1/messages",
+            {"max_tokens": 8, "messages": [{"role": "user", "content": "ping"}]},
+        ),
+        "openai": (
+            "/chat/completions",
+            {"max_tokens": 8, "messages": [{"role": "user", "content": "ping"}]},
+        ),
+    }
+
+
+    def probe_model(provider, model_id, attempts=2):
+        """True when the provider actually answers this model.
+
+        LiteLLM happily registers a model an endpoint cannot serve, and a
+        deployment that only fails at request time is harder to notice than a
+        skipped run, so a model marked "probe" is only registered after a
+        minimal completion succeeds. The upstream is flaky, so one transient
+        failure is retried; the next CronJob run is the next chance.
+
+        The request mirrors what LiteLLM sends at runtime (same adapter, same
+        auth header, same anthropic-version) so a passing probe is evidence
+        about the real call path, not just about reachability.
+        """
+        name = f"{provider['prefix']}/{model_id}"
+        adapter = provider.get("provider")
+        spec = PROBE_REQUESTS.get(adapter)
+        if spec is None:
+            # Nothing to validate against; do not block a provider that opted in
+            # with an adapter the check does not know.
+            print(f"  ! {name}: no probe defined for adapter {adapter}, skipping the check", flush=True)
+            return True
+        path, body = spec
+        payload = {**body, "model": model_id}
+        headers = {"Content-Type": "application/json"}
+        if adapter == "anthropic":
+            # Anthropic-native endpoints authenticate with x-api-key, which is
+            # also what LiteLLM's adapter sends; probing with a Bearer header
+            # would test a header the runtime never uses. INIAD ignores the
+            # version header, but the runtime sends one, so the probe does too.
+            key = os.environ.get(provider["key_env"])
+            if not key:
+                print(f"  ! {name}: {provider['key_env']} is unset, skipping the check", flush=True)
+                return False
+            headers["x-api-key"] = key
+            headers["anthropic-version"] = "2023-06-01"
+        else:
+            headers.update(auth_headers(provider))
+        for attempt in range(attempts):
+            if attempt:
+                time.sleep(2)
+            request = urllib.request.Request(
+                provider["api_base"] + path,
+                data=json.dumps(payload).encode(),
+                method="POST",
+                headers=headers,
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    reply = json.loads(response.read().decode())
+                # Anthropic answers with "content", OpenAI-compatible with "choices".
+                if "content" in reply or "choices" in reply:
+                    return True
+                print(f"  ! {name}: probe returned no completion", flush=True)
+            except Exception as error:  # noqa: BLE001
+                print(f"  ! {name}: probe {attempt + 1}/{attempts} failed: {error}", flush=True)
+        return False
 
 
     def model_vendor(provider, model_id):
@@ -508,6 +607,7 @@ data:
             print("pricing and context limits from the override files only this run", flush=True)
         prefixes = {p["prefix"] for p in PROVIDERS}
         desired = set()
+        probe_failures = []
 
         for provider in PROVIDERS:
             try:
@@ -566,8 +666,17 @@ data:
                         # protocol, matching ones are left untouched.
                         continue
 
+                if provider.get("probe") and not probe_model(provider, model_id):
+                    # Keep the previous deployment (if any) exactly as it is, and
+                    # keep the name in `desired` so the prune pass below does not
+                    # delete a model that is merely unreachable this run.
+                    print(f"  ! {name}: probe failed, not registering this run", flush=True)
+                    probe_failures.append(name)
+                    continue
+
                 # Resolve the protocol before touching an existing deployment, so a
-                # provider that no longer answers a probe leaves the old one intact.
+                # provider that no longer answers the protocol probe leaves the old
+                # one intact.
                 try:
                     litellm_model, api_base, effective_mode = deployment_for(provider, model_id, session)
                 except Exception as error:  # noqa: BLE001
@@ -620,6 +729,15 @@ data:
                     print(f"  + {name} [{effective_mode}]", flush=True)
                 except urllib.error.HTTPError as error:
                     print(f"  ! {name}: {error.code} {error.read().decode()[:160]}", flush=True)
+
+        # A run that only logs probe failures still exits 0, so end with one
+        # summary line an operator (or a log-based alert) can match on.
+        if probe_failures:
+            print(
+                f"probe failed for {len(probe_failures)} model(s), left untouched "
+                f"this run: {', '.join(probe_failures)}",
+                flush=True,
+            )
 
         # Drop models this job added previously that the provider no longer lists.
         # Wildcard config entries ("*") and unrelated models are left untouched.
@@ -704,6 +822,10 @@ spec:
     spec:
       backoffLimit: 2
       ttlSecondsAfterFinished: 3600
+      # Every model marked "probe" can spend up to 2 x 60s before registration,
+      # and concurrencyPolicy Forbid would otherwise let one hung run block the
+      # next slot.
+      activeDeadlineSeconds: 900
       template:
         spec:
           restartPolicy: OnFailure

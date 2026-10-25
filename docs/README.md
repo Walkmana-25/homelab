@@ -2,7 +2,7 @@
 
 This directory is the operational source of truth for the homelab repository.
 
-Last reviewed: 2026-10-15
+Last reviewed: 2026-10-25
 
 ## Guides
 
@@ -10,6 +10,7 @@ Last reviewed: 2026-10-15
 | --- | --- |
 | [`repository-guide.md`](repository-guide.md) | Architecture, provisioning, validation, observability, security, and contribution workflow |
 | [`linstor-update.md`](linstor-update.md) | Safe LINSTOR package and Piraeus Operator update, verification, and rollback procedure |
+| [`litellm-iniad.md`](litellm-iniad.md) | INIAD Anthropic API models through the LiteLLM gateway: registration, pre-registration health check, and verification |
 
 ## Maintenance Rules
 

@@ -136,12 +136,15 @@ spec:
         # API keys come from the litellm-env SealedSecret.
         #
         # Models are populated automatically by the litellm-model-sync CronJob
-        # (see model-sync.yaml), which registers every model each provider
-        # exposes as <provider>/<model> (zai/..., iniad/..., iniad-claude/...,
-        # opencode-go/...) together with its pricing and context window
-        # (max_input_tokens/max_output_tokens on the deployment's model_info, read
-        # off models.dev), so /v1/models and /model/info report real limits
-        # instead of leaving clients to guess. INIAD OpenAI and z.ai (GLM Coding
+        # (see model-sync.yaml), which registers every model a provider lists -
+        # plus the ids pinned for iniad-claude - as <provider>/<model> (zai/...,
+        # iniad/..., iniad-claude/..., opencode-go/...) together with its pricing
+        # and context window (max_input_tokens/max_output_tokens on the
+        # deployment's model_info, read off models.dev), so /v1/models and
+        # /model/info report real limits instead of leaving clients to guess.
+        # iniad-claude/... is pinned because INIAD's Anthropic model listing is
+        # unusable, and is registered only after a live health probe, so a failing
+        # upstream leaves the last known-good deployments in place. INIAD OpenAI and z.ai (GLM Coding
         # Plan, whose OpenAI Responses endpoint is api.z.ai/api/v1) models are
         # registered with mode "responses", so LiteLLM calls the provider's
         # /responses endpoint (bridging /v1/chat/completions to it). OpenCode Go is
