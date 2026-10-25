@@ -82,7 +82,7 @@ INIAD のエンドポイントは不安定なため、`iniad-claude` には `pro
 ## 5. モデルの追加・削除
 
 1. `argocd/k3s/apps/application/litellm/model-sync.yaml` の `iniad-claude` エントリの `models` リストを編集します。
-2. 変更をコミットして Argo CD で同期します (ConfigMap が更新されます)。
+2. 変更をコミットして Argo CD で同期します (ConfigMap が更新されます)。モデル追加・削除は ConfigMap のみの変更なので LiteLLM の再起動は不要です (`litellm_settings` を変えた場合のみ、7 章の再起動が必要)。
 3. CronJob を手動で 1 回実行し、登録を反映します。
 
 ```bash
@@ -159,6 +159,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://api.anthropic.iniad.org/api/v1/
 
 ## 7. 注意事項
 
+- **設定変更には Pod 再起動が必要**: Helm chart は `config.yaml` を `subPath` でマウントしているため、ConfigMap を更新してもコンテナ内のファイルは自動更新されません。`litellm_settings` などを変更した場合は Argo CD 同期後に `kubectl -n litellm rollout restart deploy/litellm` を実行し、`/etc/litellm/config.yaml` に反映されたことを確認してください。
 - **`cache_control` は上流で拒否される**: INIAD のゲートウェイはテキストブロック自体は受理しますが、`cache_control` が付いたブロックを 400 (`extra fields not permitted`) で拒否します。LiteLLM 1.106.x は Anthropic アダプタのリクエストに `cache_control` を自動注入する機能を持ち、**モデル単位の無効化手段が無い**ため、`litellm_settings.enable_anthropic_prompt_caching: false` でグローバルに無効化しています (`argocd/k3s/apps/application/litellm/application.yaml` に明示、実行時設定は `LiteLLM_Config` テーブルにも保存)。この設定を戻すと `iniad-claude/*` は全リクエストが 400 になります。
 - **クライアントが自前で付ける `cache_control` も 400 になる**: 上記の設定は「LiteLLM の自動注入」を止めるだけで、INIAD 自体が `cache_control` を受け付けない点は変わりません。Claude Code のように `cache_control` を自分で送るクライアントを `iniad-claude/*` に向ける場合は、キャッシュ指定を無効化してください。
 - **コストレポート**: `claude-haiku-5-5` / `claude-sonnet-5-5` という ID は Anthropic の公開 ID と同一のため、LiteLLM の組み込みコストマップに該当エントリがあれば `/spend` や管理 UI のコストは Anthropic のリスト価格で計上され、無ければ $0 になります。実際の INIAD 利用料は 0 円である点に注意してください。
