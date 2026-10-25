@@ -233,6 +233,16 @@ spec:
             enable_chat_ui: true
           litellm_settings:
             drop_params: true
+            # ── Anthropic automatic prompt caching: off ────────────
+            # LiteLLM can inject cache_control breakpoints (system + trailing
+            # turn) into every Anthropic-adapter request. INIAD's Anthropic
+            # gateway rejects any block carrying cache_control (400 "extra
+            # fields not permitted"), so iniad-claude/* would fail every call
+            # while injection is on, and there is no per-model opt-out in
+            # LiteLLM 1.106.x - only this global switch. Clients that mark
+            # their own cache_control keep working; they just no longer get
+            # automatic breakpoints they did not ask for.
+            enable_anthropic_prompt_caching: false
             # ── Web search: provider-hosted only ───────────────────
             # Clients (Codex-class apps) send the Responses hosted tool
             # {"type": "web_search"}. It is executed by the UPSTREAM, so it only

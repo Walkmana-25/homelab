@@ -15,6 +15,7 @@ INIAD の Anthropic API は Anthropic Messages API と互換のエンドポイ�
 | `anthropic-version` ヘッダ | 必須 (日付指定) | 実測では付与しなくても動作する (無視される) |
 | `anthropic-beta` ヘッダ | ベータ機能の有効化に使用 | 実測では無視される |
 | Models API (`GET /v1/models`) | モデル一覧を返す | 一覧取得は HTTP 400 (`body field required`)、`POST` は 405 を返す |
+| `cache_control` (プロンプトキャッシュ) | 対応 | 非対応。付与すると 400 (`extra fields not permitted`) |
 | 課金 | 従量課金 | 課金なし |
 
 INIAD のトークンは OpenAI API 用と同じ INIAD トークンで、`litellm-env` SealedSecret の `INIAD_API_KEY` に格納されています。**値そのものは本ドキュメントやリポジトリに記載しません。**
@@ -73,6 +74,8 @@ INIAD のエンドポイントは不安定なため、`iniad-claude` には `pro
 - ログに `! iniad-claude/<model>: probe failed, not registering this run` が出力されます。
 - run の最後に `probe failed for N model(s), left untouched this run: ...` という要約行が 1 行出ます (Job 自体は成功扱いのままです)。
 - 次回の CronJob 実行 (6 時間ごと、`0 */6 * * *`) で再試行されます。
+
+このチェックは**上流を直接**叩くため、ゲートウェイ側の変換 (例: LiteLLM が付与する `cache_control`) に起因する失敗は検出できません。登録後の最終確認は 6-3 のゲートウェイ経由のリクエストで行ってください。
 
 ---
 
@@ -156,6 +159,8 @@ curl -s -o /dev/null -w '%{http_code}\n' https://api.anthropic.iniad.org/api/v1/
 
 ## 7. 注意事項
 
+- **`cache_control` は上流で拒否される**: INIAD のゲートウェイはテキストブロック自体は受理しますが、`cache_control` が付いたブロックを 400 (`extra fields not permitted`) で拒否します。LiteLLM 1.106.x は Anthropic アダプタのリクエストに `cache_control` を自動注入する機能を持ち、**モデル単位の無効化手段が無い**ため、`litellm_settings.enable_anthropic_prompt_caching: false` でグローバルに無効化しています (`argocd/k3s/apps/application/litellm/application.yaml` に明示、実行時設定は `LiteLLM_Config` テーブルにも保存)。この設定を戻すと `iniad-claude/*` は全リクエストが 400 になります。
+- **クライアントが自前で付ける `cache_control` も 400 になる**: 上記の設定は「LiteLLM の自動注入」を止めるだけで、INIAD 自体が `cache_control` を受け付けない点は変わりません。Claude Code のように `cache_control` を自分で送るクライアントを `iniad-claude/*` に向ける場合は、キャッシュ指定を無効化してください。
 - **コストレポート**: `claude-haiku-5-5` / `claude-sonnet-5-5` という ID は Anthropic の公開 ID と同一のため、LiteLLM の組み込みコストマップに該当エントリがあれば `/spend` や管理 UI のコストは Anthropic のリスト価格で計上され、無ければ $0 になります。実際の INIAD 利用料は 0 円である点に注意してください。
 - **LibreChat は別系統**: LibreChat は INIAD Anthropic API を直接参照する設定になっており、LiteLLM のモデル登録とは独立しています。LiteLLM 側の `models` を変更しても LibreChat の設定は変わりません。
 - **キーの取り扱い**: `INIAD_API_KEY` は `litellm-env` SealedSecret にのみ存在します。平文の値をコミットしたり、ドキュメント・Issue に貼り付けたりしないでください。
