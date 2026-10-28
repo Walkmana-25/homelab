@@ -173,7 +173,33 @@ data:
     # runs before routing, so the compaction budget that follows always finds its
     # key. Entries this callback registered are refreshed; built-in cost-map
     # entries are never overwritten, and a deployment that carries neither limits
-    # nor a vendor rate entry is left alone rather than given a synthetic entry.
+    # nor any rate (vendors' built-in or its own) is left alone rather than given
+    # a synthetic entry.
+    #
+    # The entry must also carry the deployment's own per-token rates. Registering
+    # limits alone makes the key a *known* model whose entry declares no rates at
+    # all: LiteLLM's cost calculator resolves the key, finds no cost field and
+    # returns $0, while the proxy's pricing_not_applied counter reports the
+    # discrepancy. Vendors without a built-in cost-map entry hit exactly this -
+    # "openai/responses/glm-5.3-flash" and "openai/mimo-v2.6-pro" were billed at
+    # $0 through routing/* and autorouter/* while the equivalent
+    # "openai/zai/glm-5.3-flash" key, which did copy a vendor rate, was correct.
+    # The rates therefore come from the deployment itself: the model-sync CronJob
+    # writes models.dev pricing plus the explicit overrides into litellm_params
+    # (see model-sync.yaml), and any "*cost*" key on model_info is accepted as
+    # well. A deployment that declares any rate is billed from its own fields
+    # alone; the vendor's built-in entry is only the base when the deployment
+    # declares none. Merging the two per field would mix the vendor's cache and
+    # tier prices into a table the provider never quoted. Limits keep coming from
+    # model_info either way.
+    #
+    # Built-in keys (entries that carry litellm_provider) keep their own rates;
+    # deployment rates only enter the keys this callback owns.
+    #
+    # Limits-only entries therefore remain only for a deployment that genuinely
+    # has no pricing: INIAD (not billed by OpenAI) and models that models.dev or
+    # costs.json does not price (e.g. "opencode-go/omen-alpha"). There $0 is the
+    # right answer.
     #
     # The module and class names are historical: they predate z.ai / INIAD
     # support and stay because application.yaml references the handler by name.
@@ -266,14 +292,72 @@ data:
         return key if key in litellm.model_cost else None
 
 
-    def _deployment_entry(model, model_info):
-        """Cost-map entry for one deployment: its limits plus the vendor's rates."""
+    def _rate(value):
+        """A usable rate, or None.
+
+        LiteLLM's cost fields are plain numbers, so a DB value that is a string,
+        a bool, None or negative is a bad value and is dropped rather than
+        billing nonsense. 0.0 is kept: an explicitly free deployment (INIAD) and
+        a zero cache-write price are real prices.
+        """
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return value if value >= 0 else None
+
+
+    def _deployment_rates(model_info: dict, litellm_params: dict) -> dict:
+        """The per-token / per-unit rates the deployment itself declares.
+
+        Only LiteLLM's own cost fields ("*cost*" in the name, i.e. the
+        per-token / per-unit prices the cost calculator reads) are considered,
+        and only when they hold a usable number (see _rate). model-sync writes
+        models.dev pricing (plus the explicit overrides) into litellm_params;
+        "*cost*" keys on model_info are accepted too, with litellm_params
+        winning because that is the field the sync job persists pricing in.
+        """
+        rates: dict = {}
+        for source in (model_info, litellm_params):
+            for name, value in source.items():
+                if "cost" not in name:
+                    continue
+                rate = _rate(value)
+                if rate is not None:
+                    rates[name] = rate
+        return rates
+
+
+    def _has_rates(entry: dict) -> bool:
+        """True when the entry already declares at least one rate (see _rate)."""
+        return any(
+            _rate(value) is not None
+            for name, value in entry.items()
+            if "cost" in name
+        )
+
+
+    def _deployment_entry(model, model_info, litellm_params):
+        """Cost-map entry for one deployment: limits, then whichever rates apply.
+
+        A limits-only entry is not harmless: the key becomes a known model with
+        no cost fields, so LiteLLM bills it at $0. The deployment's own rates are
+        therefore used whole - a deployment that declares any rate never borrows
+        the vendor's built-in fields, since a partial override would mix the
+        vendor's cache / tier prices into a price table the provider never
+        quoted. The vendor entry is only the base when the deployment declares
+        no pricing at all.
+        """
         entry = _limit_entry(model_info) or {}
-        key = _vendor_key(model)
-        if key is not None:
-            for name, value in (litellm.model_cost.get(key) or {}).items():
-                if "cost" in name and value is not None:
-                    entry.setdefault(name, value)
+        rates = _deployment_rates(model_info, litellm_params)
+        if rates:
+            entry.update(rates)
+        else:
+            # The vendor's built-in rates are the base for a deployment that
+            # declares no pricing of its own.
+            key = _vendor_key(model)
+            if key is not None:
+                for name, value in (litellm.model_cost.get(key) or {}).items():
+                    if "cost" in name and _rate(value) is not None:
+                        entry.setdefault(name, value)
         return entry or None
 
 
@@ -326,7 +410,11 @@ data:
             model = params.get("model")
             if not isinstance(model, str) or not model.startswith(GATEWAY_PREFIXES):
                 continue
-            entry = _deployment_entry(model, _as_dict(deployment.get("model_info")))
+            entry = _deployment_entry(
+                model,
+                _as_dict(deployment.get("model_info")),
+                params,
+            )
             if entry is None:
                 continue
             # The Responses bridge also looks the key up without its "responses/"
@@ -340,11 +428,15 @@ data:
                     if current.get("litellm_provider") and key not in _registered_keys:
                         # A built-in entry (or another callback's) stays authoritative.
                         # Router-created stubs carry no litellm_provider, so they can
-                        # be filled with the deployment's limits and the vendor rates.
+                        # be filled with the deployment's limits and rates.
+                        continue
+                    if _has_rates(current) and not _has_rates(entry):
+                        # Another deployment already priced this key; a limits-only
+                        # re-registration must not reset it back to $0.
                         continue
                     if key in _registered_keys and _entry_current(entry, current):
                         continue
-                litellm.register_model(model_cost={key: entry})
+                litellm.register_model(model_cost={key: dict(entry)})
                 _registered_keys.add(key)
 
 
