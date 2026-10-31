@@ -1,8 +1,12 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# application.yaml is intentionally NOT listed here: this kustomization is
+# rendered by the technitium-sd Application itself (its source path), so
+# including the Application manifest would make the parent "infrastructure"
+# Application and this one manage the same objects (perpetual OutOfSync from
+# conflicting argocd.argoproj.io/tracking-id values).
 resources:
-  - application.yaml
   - deployment.yaml
   - service.yaml
   - technitium-token-sealed-secret.yaml

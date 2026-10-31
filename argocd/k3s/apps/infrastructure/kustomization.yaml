@@ -14,7 +14,10 @@ resources:
   # - longhorn
   - cloudflare-tunnel-ingress-controller
   - victoria-metrics
-  - technitium-sd
+  # Only the Application manifest: the workloads belong to the technitium-sd
+  # Application (see technitium-sd/kustomization.yaml), so rendering the whole
+  # directory here would duplicate ownership and leave both apps OutOfSync.
+  - technitium-sd/application.yaml
   - grafana
   - headlamp
   # VMベースの基幹インフラとして移行しました。
