@@ -8,10 +8,9 @@
 # SealedSecrets (see credentials.yaml) via the chart's existingSecret hooks.
 #
 # Images are pushed to Harbor (harbor-k3s.lapis-dev.work/apps/auto-manual-*)
-# and additionally loaded into each k3s node's containerd, hence
-# imagePullPolicy: IfNotPresent. The in-cluster Harbor pull credential
-# (robot$k8s-pull) currently returns 401 from the registry, so a direct pull
-# would fail; see the deployment notes for follow-up.
+# and pulled directly by the k3s nodes with the registry credential below.
+# The frontend keeps imagePullPolicy: Always so that a refreshed "latest" tag
+# is picked up on every pod creation instead of relying on manual imports.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -53,7 +52,10 @@ spec:
         frontend:
           image:
             repository: harbor.lapis-dev.work/private/front
-            pullPolicy: IfNotPresent
+            # Always: the "latest" tag is mutable, and the nodes must resolve
+            # it on every pod start (a plain IfNotPresent restart would keep
+            # a stale digest). Verified that Harbor pulls succeed in-cluster.
+            pullPolicy: Always
 
         api:
           image:
