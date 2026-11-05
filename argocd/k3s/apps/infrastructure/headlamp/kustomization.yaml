@@ -3,3 +3,6 @@ kind: Kustomization
 
 resources:
   - application.yaml
+  # Discovery endpoint (namespace monitoring) that lets the bundled Headlamp
+  # Prometheus plugin auto-detect the in-cluster VictoriaMetrics vmsingle.
+  - vmsingle-discovery-service.yaml

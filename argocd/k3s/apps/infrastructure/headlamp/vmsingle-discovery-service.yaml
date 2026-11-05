@@ -1,0 +1,35 @@
+---
+# Discovery endpoint for the Headlamp Prometheus plugin.
+#
+# The plugin is bundled with the Headlamp image as a static plugin and
+# auto-detects Prometheus-compatible endpoints by looking for a Service
+# labelled `headlamp-prometheus=true` (then pods, then the common
+# app.kubernetes.io/name=prometheus labels). This dedicated Service points at
+# the in-cluster VictoriaMetrics vmsingle pods, which expose the Prometheus
+# HTTP query API on 8428.
+#
+# The operator-managed `vmsingle-victoria-metrics-k8s-stack` Service is left
+# untouched on purpose: patching it from another Argo CD application would
+# fight the victoria-metrics chart's self-heal. The plugin probes only the
+# first match cluster-wide, so keep exactly one Service with this label.
+apiVersion: v1
+kind: Service
+metadata:
+  name: headlamp-vmsingle
+  namespace: monitoring
+  labels:
+    headlamp-prometheus: "true"
+    app.kubernetes.io/part-of: infrastructure
+    app.kubernetes.io/component: headlamp-metrics
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: vmsingle
+    app.kubernetes.io/instance: victoria-metrics-k8s-stack
+    app.kubernetes.io/component: monitoring
+    managed-by: vm-operator
+  ports:
+    - name: http
+      port: 8428
+      targetPort: 8428
+      protocol: TCP

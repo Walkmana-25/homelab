@@ -99,6 +99,18 @@ For a new VM, registering its DNS A record enables metric discovery, and running
 
 Grafana dashboards are ConfigMaps labeled `grafana_dashboard: "1"` in the monitoring namespace and loaded by the sidecar. Allow time for propagation and verify the served dashboard through the Grafana API before assuming a change failed.
 
+### Headlamp Pod Metrics
+
+Headlamp serves the upstream Prometheus plugin (`0.9.x`) as a bundled static plugin; the chart value `config.staticPlugins.enabled` is pinned to `true` in `argocd/k3s/apps/infrastructure/headlamp/application.yaml`. No `pluginsManager` or outbound npm access is required.
+
+The plugin reads the Prometheus-compatible HTTP API of VictoriaMetrics `vmsingle` (`http://vmsingle-victoria-metrics-k8s-stack.monitoring.svc.cluster.local:8428`, the same endpoint the Grafana datasource uses) through the Kubernetes service proxy, so no Prometheus Operator CRDs and no ServiceMonitor objects are involved.
+
+- `argocd/k3s/apps/infrastructure/headlamp/vmsingle-discovery-service.yaml` creates the Service `headlamp-vmsingle` in `monitoring` with the label `headlamp-prometheus: "true"`. The plugin auto-detects Prometheus endpoints by that label and probes the first match cluster-wide; label exactly one Service.
+- Do not add the label to the operator-managed `vmsingle-victoria-metrics-k8s-stack` Service. The victoria-metrics chart owns it, so the label would be reverted by self-heal; the dedicated Service avoids the drift.
+- Plugin settings are stored per browser in `localStorage`, not in the cluster. Each user enables it once: **Settings → Plugins → Prometheus → Enable Metrics** on, **Auto detect** on (or set the address to `monitoring/vmsingle-victoria-metrics-k8s-stack:8428` with auto-detect off, subpath empty). Pod, Deployment, and PVC detail pages then show charts.
+- The plugin's **Test Connection** button can report an error against VictoriaMetrics; this is cosmetic and charts still render.
+- Removing the browser profile resets the setting; the cluster-side Service is the only GitOps-managed part.
+
 ## Storage
 
 Longhorn uses prepared Btrfs storage. LINSTOR uses pinned LINBIT packages and the Piraeus Operator. `linstor_target_version` in `ansible/roles/linstor/defaults/main.yml` is the package version source of truth.

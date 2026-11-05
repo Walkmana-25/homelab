@@ -21,6 +21,14 @@ spec:
     targetRevision: 0.46.0
     helm:
       values: |
+        config:
+          # The Headlamp image bundles the Prometheus plugin in
+          # /headlamp/static-plugins. Keep it explicitly enabled rather than
+          # relying on the chart default so a chart bump cannot silently drop
+          # it. The plugin queries VictoriaMetrics through the Kubernetes
+          # service proxy (see vmsingle-discovery-service.yaml).
+          staticPlugins:
+            enabled: true
         service:
           type: ClusterIP
         ingress:
