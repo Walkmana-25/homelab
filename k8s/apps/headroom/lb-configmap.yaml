@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: headroom-lb-config
+  labels:
+    app.kubernetes.io/name: headroom-lb
+data:
+  # Mounted as /etc/nginx/nginx.conf in the headroom-lb pods.
+  # proxy_http_version 1.0 + `Connection close` makes nginx close the
+  # upstream connection after every request, so the Kubernetes Service
+  # load-balances per connection and requests spread across Headroom pods.
+  nginx.conf: |
+    worker_processes 1;
+    error_log /dev/stderr warn;
+    pid /tmp/nginx.pid;
+
+    events {
+      worker_connections 1024;
+    }
+
+    http {
+      access_log off;
+      client_max_body_size 16m;
+
+      upstream headroom {
+        server headroom.headroom.svc.cluster.local:8787;
+      }
+
+      server {
+        listen 8787;
+
+        location / {
+          proxy_pass http://headroom;
+          proxy_http_version 1.0;
+          proxy_set_header Connection close;
+          proxy_set_header Host $host;
+          proxy_connect_timeout 5s;
+          proxy_read_timeout 120s;
+          proxy_send_timeout 120s;
+          proxy_next_upstream error timeout http_502 http_503 http_504;
+          proxy_buffering off;
+          proxy_request_buffering off;
+        }
+      }
+    }

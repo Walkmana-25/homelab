@@ -43,6 +43,12 @@ spec:
             # it off explicitly to keep the pod from calling home.
             - name: HEADROOM_BEACON
               value: "off"
+            # Match the ONNX runtime thread pool to the raised CPU limit so
+            # compression keeps scaling past 2 vCPUs.
+            - name: HEADROOM_KOMPRESS_ONNX_INTRA_THREADS
+              value: "3"
+            - name: HEADROOM_KOMPRESS_ONNX_INTER_THREADS
+              value: "1"
             - name: HEADROOM_PROXY_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -70,5 +76,12 @@ spec:
               cpu: 100m
               memory: 512Mi
             limits:
-              cpu: "2"
+              cpu: "3"
               memory: 4Gi
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: headroom

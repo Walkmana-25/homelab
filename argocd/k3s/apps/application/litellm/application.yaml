@@ -175,7 +175,7 @@ spec:
               litellm_params:
                 guardrail: headroom
                 mode: pre_call
-                api_base: http://headroom.headroom.svc.cluster.local:8787
+                api_base: http://headroom-lb.headroom.svc.cluster.local:8787
                 api_key: os.environ/HEADROOM_PROXY_TOKEN
                 default_on: true
                 unreachable_fallback: fail_open

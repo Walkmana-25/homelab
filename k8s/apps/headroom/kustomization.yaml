@@ -4,3 +4,6 @@ kind: Kustomization
 resources:
   - deployment.yaml
   - service.yaml
+  - lb-configmap.yaml
+  - lb-deployment.yaml
+  - lb-service.yaml
