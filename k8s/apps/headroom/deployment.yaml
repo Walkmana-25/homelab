@@ -43,11 +43,12 @@ spec:
             # it off explicitly to keep the pod from calling home.
             - name: HEADROOM_BEACON
               value: "off"
-            # Match the ONNX runtime thread pool to the raised CPU limit so
-            # compression keeps scaling past 2 vCPUs.
-            - name: HEADROOM_KOMPRESS_ONNX_INTRA_THREADS
-              value: "3"
-            - name: HEADROOM_KOMPRESS_ONNX_INTER_THREADS
+            # Kompress (ML compression) is disabled because its downsides
+            # outweigh the savings for this deployment. Disable the fallback
+            # too, otherwise unmatched content still routes through Kompress.
+            - name: HEADROOM_DISABLE_KOMPRESS
+              value: "1"
+            - name: HEADROOM_DISABLE_KOMPRESS_FALLBACK
               value: "1"
             - name: HEADROOM_PROXY_TOKEN
               valueFrom:
