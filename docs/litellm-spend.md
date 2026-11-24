@@ -53,6 +53,12 @@ INIAD のモデルは価格を登録していないため、意図的に $0 で�
 (実際の INIAD 利用料も 0 円)。z.ai GLM Coding Plan は定額サブスクだが、
 ここで記録される額は従量課金のリスト価格による参考値である。
 
+`zai/glm-5.4` は models.dev にも LiteLLM のビルトイン cost map にも未収載の
+ため、現時点では `limits.json` で context window (1M / 128K) だけを固定し、
+価格は登録していない。したがって spend 上は $0 で計上される（3 章の
+limits だけのエントリと同じ扱い）。公式のリスト価格が公開されたら
+`costs.json` に追記し、model-sync を再実行して置き換える。
+
 ## 3. 落とし穴: limits だけの cost map エントリは $0 課金になる
 
 `callbacks.yaml` の `opencode_models` コールバックは、auto-router のコンテキスト圧縮が
