@@ -9,6 +9,8 @@
 #   INIAD) context limits into LiteLLM's model cost map (pre-call, read off the
 #   router) so the auto-router's context compaction can resolve them.
 # - compact_search.py: bound the payload of provider-hosted search results.
+# - mistral_user_agent.py: the official Mistral client User-Agent on Mistral
+#   calls (the subscription endpoint rejects other clients).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -52,6 +54,64 @@ data:
 
 
     compact_search_handler = CompactSearchParams()
+  mistral_user_agent.py: |
+    import litellm
+    from litellm.integrations.custom_logger import CustomLogger
+
+    # Mistral's subscription endpoints (Mistral Code / Vibe) reject requests
+    # that do not identify as the official client, so every upstream Mistral
+    # call has to carry its User-Agent. The mistral models this proxy serves are
+    # registered in LiteLLM's database through the admin UI with the shared
+    # "mistral-code" credential - they have no model_list entry in this repo, so
+    # there is no litellm_params.extra_headers to pin the value on. A
+    # per-deployment hook covers every current and future mistral deployment
+    # without touching the database.
+    #
+    # Like opencode_session, the hook runs once per selected deployment: the
+    # header is only added when the destination resolves to the "mistral"
+    # provider, so z.ai / INIAD / OpenCode Go requests are untouched. A
+    # caller-supplied User-Agent is replaced on purpose, since the upstream
+    # accepts only the official client's value.
+    MISTRAL_USER_AGENT = "mistral-client-python/Mistral-Vibe/3.1.4"
+
+
+    def _is_mistral(kwargs):
+        model = kwargs.get("model")
+        if not isinstance(model, str):
+            return False
+        custom_llm_provider = kwargs.get("custom_llm_provider")
+        api_base = kwargs.get("api_base")
+        try:
+            provider = litellm.get_llm_provider(
+                model=model,
+                custom_llm_provider=custom_llm_provider
+                if isinstance(custom_llm_provider, str)
+                else None,
+                api_base=api_base if isinstance(api_base, str) else None,
+            )[1]
+        except Exception:  # noqa: BLE001
+            # get_llm_provider raises BadRequestError for ids it cannot map; the
+            # deployments this proxy serves are spelled "mistral/<id>".
+            return model.startswith("mistral/")
+        return provider == "mistral"
+
+
+    class MistralUserAgent(CustomLogger):
+        async def async_pre_call_deployment_hook(self, kwargs, call_type):
+            if not _is_mistral(kwargs):
+                return None
+
+            extra_headers = kwargs.get("extra_headers")
+            extra_headers = dict(extra_headers) if isinstance(extra_headers, dict) else {}
+            for name in list(extra_headers):
+                if str(name).lower() == "user-agent":
+                    del extra_headers[name]
+            extra_headers["User-Agent"] = MISTRAL_USER_AGENT
+            kwargs["extra_headers"] = extra_headers
+            return kwargs
+
+
+    mistral_user_agent_handler = MistralUserAgent()
   opencode_session.py: |
     from urllib.parse import urlparse
 

@@ -303,10 +303,15 @@ spec:
             # model_info, which the model-sync CronJob keeps filled from
             # models.dev, so a new or re-windowed model needs no code change (see
             # callbacks.yaml).
+            # mistral_user_agent sets the official Mistral client User-Agent on
+            # mistral deployments. Those models are registered in the database
+            # through the admin UI (shared "mistral-code" credential), so there
+            # is no model_list entry here to carry extra_headers.
             callbacks:
               - callbacks.opencode_session.opencode_session_handler
               - callbacks.opencode_models.opencode_models_handler
               - callbacks.compact_search.compact_search_handler
+              - callbacks.mistral_user_agent.mistral_user_agent_handler
             # Forward the client's x-* headers (notably x-opencode-session) for
             # requests that name an opencode-go/... model directly, so the proxy's
             # own session never replaces the client's. This is the documented
