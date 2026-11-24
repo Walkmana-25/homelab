@@ -772,6 +772,9 @@ data:
   # clients already assumed rather than left absent. Absent would keep the
   # auto-router's compaction budget from resolving the model at all, which
   # fails the request instead of compacting it.
+  # zai/glm-5.4 is pinned for the same reason while models.dev still stops at
+  # glm-5.3: z.ai's model docs publish 1M context and 128K output, but neither
+  # models.dev nor the pinned LiteLLM cost map carries the id yet.
   limits.json: |
     {
       "opencode-go/glm-5.1": {
@@ -799,6 +802,10 @@ data:
         "output": 65536
       },
       "opencode-go/qwen3.7-max": {
+        "context": 1000000,
+        "output": 131072
+      },
+      "zai/glm-5.4": {
         "context": 1000000,
         "output": 131072
       }
