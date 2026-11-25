@@ -1,5 +1,12 @@
 secret.yaml
 secrets.yaml
+.env
+.env.*
+!.env.example
+!.env.tpl
+secrets/
+*.age
+*.age.key
 .opencode/
 .ansible/
 *.log

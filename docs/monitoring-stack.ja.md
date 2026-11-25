@@ -129,6 +129,7 @@ VM はパブリック IP を持ちます。インターネットに面したホ�
 ├── compose.yaml
 ├── .env                      # chmod 600、コミットしない
 ├── .env.example              # プレースホルダー入りテンプレート（コミットする）
+├── .env.tpl                  # op:// 参照のみ（コミットする）
 ├── secrets/
 │   └── grafana_admin_password  # chmod 600、コミットしない
 ├── caddy/
@@ -180,6 +181,8 @@ services:
 
   caddy:
     image: caddy:2.9
+    env_file:
+      - .env
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -266,6 +269,8 @@ TimeoutStartSec=0
 [Install]
 WantedBy=multi-user.target
 ```
+
+このシンプルなユニットは `.env` が既に存在することを前提にしています。1Password から秘密を生成する場合は、[1Password によるシークレット管理](#1password-によるシークレット管理)の `ExecStartPre` 付きユニットを使ってください。
 
 ## Caddy と Cloudflare Tunnel
 
@@ -753,10 +758,9 @@ GitHub ホスト型ランナーの IP は固定ではありません。TCP 22 �
 
 ### シークレット
 
-- B2 キー、Discord webhook、Grafana 管理者パスワード、取り込み Basic Auth 資格情報は VM 上の `/opt/monitoring/.env` に置き、モード `0600` にします。
-- このファイルは SOPS + age または Ansible Vault で管理します。平文をコミットしません。
-- GitHub Secrets には SSH 鍵と Cloudflare Access トークンのみを入れます。
-- B2 アプリケーションキーと取り込み資格情報は定期的にローテーションします。
+- ワークロードの秘密は VM 上の `/opt/monitoring/.env` に置き、モード `0600` にします。`.env.tpl` から `op inject` で生成するか（[1Password によるシークレット管理](#1password-によるシークレット管理)参照）、SOPS + age / Ansible Vault で管理します。
+- GitHub Secrets には 1Password の Service Account トークンのみを入れます。Workload Identity を使う場合は何も入れません。SSH 鍵と Cloudflare の資格情報はデプロイ時に 1Password から読み込みます。
+- Service Account トークン、B2 アプリケーションキー、取り込み資格情報は定期的にローテーションします。
 
 ### イメージ更新
 
@@ -891,6 +895,130 @@ Lifecycle ルールが無効のままだと、この計画は上限を持ちま�
 - `.env` は `0600` のままコミットしません。
 - 取り込み資格情報と Discord webhook を定期的にローテーションします。
 - シークレットや個人情報を含むログはクラスタを出る前にフィルタします。Fluent Bit でフィールドを落としたりマスクできます。
+
+## 1Password によるシークレット管理
+
+オンプレミスのクラスタは SealedSecrets を使います。OCI の Compose スタックは、1Password の Service Account と `op` CLI を使うことで、ワークロードの秘密を GitHub やコミット済みファイルに置かずに済みます。
+
+### 前提条件
+
+- Service Account を利用できる 1Password プラン。Business / Enterprise が必要な場合があるため、現在のプランを確認してください。
+- OCI VM に 1Password CLI 2.18.0 以降。
+- 専用ボールト（例: `Homelab`）に次のアイテムを用意:
+  - `Backblaze B2`: アクセスキー ID とシークレットアクセスキー
+  - `Grafana`: 管理者パスワードと Discord webhook URL
+  - `Cloudflare`: トンネルトークンと Access サービストークン
+  - `Caddy`: 取り込みパスワードのハッシュ
+- そのボールトだけに読み取り専用でアクセスできる Service Account。
+- Service Account トークンを VM 上に `0600` で保存し、Git の外に置く。
+
+### フロー
+
+```text
+1Password vault
+  ├─ OCI VM: op inject -> .env (0600) -> docker compose
+  └─ GitHub Actions: load-secrets-action -> SSH 鍵 + Cloudflare Access トークン
+```
+
+GitHub Actions はデプロイ用の資格情報だけを読み込みます。B2 キー、Discord webhook、Grafana 管理者パスワードは OCI VM が起動時に取得します。
+
+### `.env.tpl`
+
+テンプレートはコミットします。`op://` 参照だけが入っています。
+
+```dotenv
+# /opt/monitoring/.env.tpl
+B2_ACCESS_KEY_ID={{ op://Homelab/backblaze-b2/access-key-id }}
+B2_SECRET_ACCESS_KEY={{ op://Homelab/backblaze-b2/secret-access-key }}
+DISCORD_WEBHOOK_URL={{ op://Homelab/grafana/discord-webhook-url }}
+GRAFANA_ROOT_URL=https://grafana-oci.lapis-dev.work
+CF_TUNNEL_TOKEN={{ op://Homelab/cloudflare/tunnel-token }}
+INGEST_PASSWORD_HASH={{ op://Homelab/caddy/ingest-password-hash }}
+```
+
+起動時に実際の `.env` を生成します。
+
+```bash
+op inject -i /opt/monitoring/.env.tpl -o /opt/monitoring/.env
+chmod 600 /opt/monitoring/.env
+```
+
+`.env` はコミットしません。`.gitignore` に `.env`、`.env.*`（`.env.example` と `.env.tpl` を除く）、`secrets/` を追加します。
+
+### Grafana 管理者シークレット
+
+Compose は `secrets/grafana_admin_password` を Docker secret としてマウントします。`docker compose up` の前に 1Password から生成します。
+
+```bash
+op read 'op://Homelab/grafana/admin-password' \
+  > /opt/monitoring/secrets/grafana_admin_password
+chmod 600 /opt/monitoring/secrets/grafana_admin_password
+```
+
+### systemd ユニット
+
+```ini
+[Unit]
+Description=Monitoring stack
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/monitoring
+LoadCredential=op_token:/etc/monitoring/op_token
+ExecStartPre=/bin/sh -c 'umask 077; export OP_SERVICE_ACCOUNT_TOKEN="$(cat "$CREDENTIALS_DIRECTORY/op_token")"; exec /usr/bin/op inject -i /opt/monitoring/.env.tpl -o /opt/monitoring/.env'
+ExecStartPre=/bin/sh -c 'umask 077; export OP_SERVICE_ACCOUNT_TOKEN="$(cat "$CREDENTIALS_DIRECTORY/op_token")"; exec /usr/bin/op read "op://Homelab/grafana/admin-password" > /opt/monitoring/secrets/grafana_admin_password'
+ExecStart=/usr/bin/docker compose up -d --wait
+ExecStop=/usr/bin/docker compose down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`/etc/monitoring/op_token` には Service Account トークンだけを入れ、`0600`、root 所有にします。`LoadCredential` は `$CREDENTIALS_DIRECTORY` 経由でトークンを渡すため、コマンドラインにトークンを置きません。
+
+より単純な代替案は `EnvironmentFile=/etc/monitoring/op.env` に `OP_SERVICE_ACCOUNT_TOKEN=...` を入れ、`0600` にする方法です。読みやすい反面、トークンを平文ファイルから読み込みます。
+
+### GitHub Actions
+
+```yaml
+- name: Load deploy credentials
+  uses: 1password/load-secrets-action@v5
+  with:
+    export-env: true
+  env:
+    OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+    SSH_KEY: op://Homelab/oci/deploy-ssh-key?ssh-format=openssh
+    CF_ACCESS_CLIENT_ID: op://Homelab/cloudflare/access-client-id
+    CF_ACCESS_CLIENT_SECRET: op://Homelab/cloudflare/access-client-secret
+```
+
+Workload Identity を使うと、長期 Service Account トークンを置かずに済みます。
+
+```yaml
+permissions:
+  id-token: write
+  contents: read
+env:
+  OP_WORKLOAD_ID: ${{ vars.OP_WORKLOAD_ID }}
+  OP_ENVIRONMENT_ID: ${{ vars.OP_ENVIRONMENT_ID }}
+  OP_INTEGRATION_KEY: ${{ secrets.OP_INTEGRATION_KEY }}
+```
+
+Workload Identity は public preview です。利用前に利用可否を確認してください。
+
+### セキュリティ上の注意
+
+- `OP_SERVICE_ACCOUNT_TOKEN` はパスワードとして扱います。`0600`、root 所有、Git / CI ログ / `docker inspect` に出さない。
+- Service Account には専用ボールトへの読み取り専用権限だけを付与します。書き込み権限は不要です。
+- `op inject` は実際の `.env` をディスクに書きます。`0600` を維持し、可能なら tmpfs に置いて起動時に再生成します。
+- 1Password Service Account には時間/日次のリクエスト上限があります。`op inject` は secret ごとにリクエストを作るため、タイマーで毎分実行せず起動時だけにします。item ID を使うとリクエストを減らせます。
+- 1Password が利用できないと `op inject` が失敗し、スタックが起動しません。稼働中のコンテナは環境変数を保持します。災害復旧用に暗号化した `.env` のバックアップを検討してください。
+- GitHub Actions のログはシークレットをマスクしますが、`set -x`、`env`、加工で漏れることがあります。環境変数を出力しないでください。
+- オンプレミスの SealedSecrets 設計は維持します。1Password Kubernetes Operator は任意であり、この移行には必須ではありません。
 
 ## 移行計画
 

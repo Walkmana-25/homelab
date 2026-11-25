@@ -160,6 +160,7 @@ The VM has a public IP. Treat it as an Internet-facing host:
 ├── compose.yaml
 ├── .env                      # chmod 600, never committed
 ├── .env.example              # committed template with placeholders
+├── .env.tpl                  # op:// references, committed
 ├── secrets/
 │   └── grafana_admin_password  # chmod 600, never committed
 ├── caddy/
@@ -212,6 +213,8 @@ services:
 
   caddy:
     image: caddy:2.9
+    env_file:
+      - .env
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -303,6 +306,10 @@ TimeoutStartSec=0
 [Install]
 WantedBy=multi-user.target
 ```
+
+This simple unit assumes `.env` already exists. If secrets are generated from
+1Password, use the `ExecStartPre` unit in
+[Secrets management with 1Password](#secrets-management-with-1password).
 
 ## Caddy and Cloudflare Tunnel
 
@@ -853,11 +860,15 @@ sudoers rule limited to `deploy.sh`.
 
 ### Secrets
 
-- B2 keys, Discord webhook, Grafana admin password, and ingest Basic Auth
-  credentials live in `/opt/monitoring/.env` on the VM, mode `0600`.
-- Manage that file with SOPS + age or Ansible Vault. Do not commit plaintext.
-- GitHub Secrets contain only the SSH key and Cloudflare Access token.
-- Rotate the B2 application key and ingest credentials periodically.
+- Workload secrets live in `/opt/monitoring/.env`, mode `0600`. Generate it
+  with `op inject` from `.env.tpl` (see
+  [Secrets management with 1Password](#secrets-management-with-1password)) or
+  with SOPS + age / Ansible Vault.
+- GitHub Secrets contain only the 1Password service account token, or nothing
+  if Workload Identity is used. SSH and Cloudflare credentials are loaded from
+  1Password at deploy time.
+- Rotate the service account token, B2 application key, and ingest credentials
+  periodically.
 
 ### Image updates
 
@@ -1026,6 +1037,149 @@ Define recovery objectives before cutover:
 - Rotate ingest credentials and the Discord webhook periodically.
 - Filter logs that contain secrets or personal data before they leave the
   cluster. Fluent Bit can drop or redact fields.
+
+## Secrets management with 1Password
+
+The on-premises cluster keeps SealedSecrets. The OCI Compose stack can use
+1Password Service Accounts with the `op` CLI so that workload secrets never live
+in GitHub or in a committed file.
+
+### Prerequisites
+
+- A 1Password plan that supports Service Accounts. Verify the current plan; this
+  may require a Business or Enterprise plan.
+- 1Password CLI 2.18.0 or later on the OCI VM.
+- A dedicated vault, for example `Homelab`, containing:
+  - `Backblaze B2`: access key ID and secret access key
+  - `Grafana`: admin password and Discord webhook URL
+  - `Cloudflare`: tunnel token and Access service token
+  - `Caddy`: ingest password hash
+- A Service Account with read-only access to only that vault.
+- The service account token stored on the VM, mode `0600`, outside Git.
+
+### Flow
+
+```text
+1Password vault
+  ├─ OCI VM: op inject -> .env (0600) -> docker compose
+  └─ GitHub Actions: load-secrets-action -> SSH key + Cloudflare Access token
+```
+
+GitHub Actions loads only deploy credentials. B2 keys, Discord webhook, and the
+Grafana admin password are fetched by the OCI VM at start time.
+
+### `.env.tpl`
+
+Commit the template; it contains only `op://` references.
+
+```dotenv
+# /opt/monitoring/.env.tpl
+B2_ACCESS_KEY_ID={{ op://Homelab/backblaze-b2/access-key-id }}
+B2_SECRET_ACCESS_KEY={{ op://Homelab/backblaze-b2/secret-access-key }}
+DISCORD_WEBHOOK_URL={{ op://Homelab/grafana/discord-webhook-url }}
+GRAFANA_ROOT_URL=https://grafana-oci.lapis-dev.work
+CF_TUNNEL_TOKEN={{ op://Homelab/cloudflare/tunnel-token }}
+INGEST_PASSWORD_HASH={{ op://Homelab/caddy/ingest-password-hash }}
+```
+
+Generate the real `.env` at start:
+
+```bash
+op inject -i /opt/monitoring/.env.tpl -o /opt/monitoring/.env
+chmod 600 /opt/monitoring/.env
+```
+
+Do not commit `.env`. Add `.env`, `.env.*` (except `.env.example` and
+`.env.tpl`), and `secrets/` to `.gitignore`.
+
+### Grafana admin secret
+
+The Compose file mounts `secrets/grafana_admin_password` as a Docker secret.
+Generate it from 1Password before `docker compose up`:
+
+```bash
+op read 'op://Homelab/grafana/admin-password' \
+  > /opt/monitoring/secrets/grafana_admin_password
+chmod 600 /opt/monitoring/secrets/grafana_admin_password
+```
+
+### systemd unit
+
+```ini
+[Unit]
+Description=Monitoring stack
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/monitoring
+LoadCredential=op_token:/etc/monitoring/op_token
+ExecStartPre=/bin/sh -c 'umask 077; export OP_SERVICE_ACCOUNT_TOKEN="$(cat "$CREDENTIALS_DIRECTORY/op_token")"; exec /usr/bin/op inject -i /opt/monitoring/.env.tpl -o /opt/monitoring/.env'
+ExecStartPre=/bin/sh -c 'umask 077; export OP_SERVICE_ACCOUNT_TOKEN="$(cat "$CREDENTIALS_DIRECTORY/op_token")"; exec /usr/bin/op read "op://Homelab/grafana/admin-password" > /opt/monitoring/secrets/grafana_admin_password'
+ExecStart=/usr/bin/docker compose up -d --wait
+ExecStop=/usr/bin/docker compose down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`/etc/monitoring/op_token` contains only the service account token, mode `0600`,
+owned by root. `LoadCredential` exposes it through `$CREDENTIALS_DIRECTORY`; the
+token is not placed on the command line.
+
+Simpler alternative: `EnvironmentFile=/etc/monitoring/op.env` with
+`OP_SERVICE_ACCOUNT_TOKEN=...` and mode `0600`. This is easier to read but the
+token is loaded from a plain file.
+
+### GitHub Actions
+
+```yaml
+- name: Load deploy credentials
+  uses: 1password/load-secrets-action@v5
+  with:
+    export-env: true
+  env:
+    OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+    SSH_KEY: op://Homelab/oci/deploy-ssh-key?ssh-format=openssh
+    CF_ACCESS_CLIENT_ID: op://Homelab/cloudflare/access-client-id
+    CF_ACCESS_CLIENT_SECRET: op://Homelab/cloudflare/access-client-secret
+```
+
+Workload Identity can replace the long-lived service account token:
+
+```yaml
+permissions:
+  id-token: write
+  contents: read
+env:
+  OP_WORKLOAD_ID: ${{ vars.OP_WORKLOAD_ID }}
+  OP_ENVIRONMENT_ID: ${{ vars.OP_ENVIRONMENT_ID }}
+  OP_INTEGRATION_KEY: ${{ secrets.OP_INTEGRATION_KEY }}
+```
+
+Workload Identity is in public preview; verify availability before relying on it.
+
+### Security notes
+
+- Treat `OP_SERVICE_ACCOUNT_TOKEN` as a password. Mode `0600`, root-owned, never
+  in Git, CI logs, or `docker inspect` output.
+- Grant the Service Account read-only access to the dedicated vault. It does not
+  need write access.
+- `op inject` writes a real `.env` to disk. Keep it `0600`; optionally place it on
+  a tmpfs and regenerate it at boot.
+- 1Password Service Accounts have hourly and daily request limits. `op inject`
+  makes requests per secret; run it at start, not on a timer. Use item IDs to
+  reduce requests.
+- If 1Password is unavailable, `op inject` fails and the stack does not start.
+  Running containers keep their environment. Consider an encrypted fallback copy
+  of `.env` for disaster recovery.
+- GitHub Actions logs mask secrets, but `set -x`, `env`, and transformations can
+  leak them. Do not print the environment.
+- Keep the on-premises SealedSecrets design. The 1Password Kubernetes Operator is
+  optional and not required for this migration.
 
 ## Migration Plan
 
