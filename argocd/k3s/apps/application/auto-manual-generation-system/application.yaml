@@ -9,8 +9,9 @@
 #
 # Images are pushed to Harbor (harbor-k3s.lapis-dev.work/apps/auto-manual-*)
 # and pulled directly by the k3s nodes with the registry credential below.
-# The frontend keeps imagePullPolicy: Always so that a refreshed "latest" tag
-# is picked up on every pod creation instead of relying on manual imports.
+# All app images (frontend/api/agent) keep imagePullPolicy: Always so that a
+# refreshed "latest" tag is picked up on every pod creation instead of relying
+# on manual imports or on node-side cache eviction.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -60,7 +61,10 @@ spec:
         api:
           image:
             repository: harbor.lapis-dev.work/private/api
-            pullPolicy: IfNotPresent
+            # Always for the same reason as the frontend: "latest" is mutable,
+            # so a node that already cached an older digest would otherwise
+            # keep running stale code after a rebuild is pushed to Harbor.
+            pullPolicy: Always
           env:
             APP_ENV: production
             CORS_ORIGINS: '["https://manual.lapis-dev.work"]'
@@ -99,7 +103,8 @@ spec:
         agent:
           image:
             repository: harbor.lapis-dev.work/private/agent
-            pullPolicy: IfNotPresent
+            # Always, to keep the agent on the freshly built image as well.
+            pullPolicy: Always
           env:
             OPENAI_MODEL: iniad/gpt-6-luna
           # SealedSecret with OPENAI_* (all AI via LiteLLM).
