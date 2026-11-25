@@ -78,6 +78,13 @@ spec:
             # requires.
             WHISPER_BASE_URL: http://litellm.litellm.svc.cluster.local:4000/v1
             WHISPER_MODEL: openai/whisper-large-v3-turbo
+            # PDF export renders with Typst, which downloads the
+            # "@preview/cmarker" package into its cache on first compile. The
+            # container root FS is read-only, so point the XDG cache at the
+            # writable /tmp emptyDir. Without this the download fails with
+            # "failed to create temporary package directory: Read-only file
+            # system" and /export/pdf returns 500 (Markdown export is fine).
+            XDG_CACHE_HOME: /tmp/.cache
           persistence:
             # Uploaded audio and wiki source files are persisted instead of
             # living on the ephemeral /tmp emptyDir. The chart owns the PVC
