@@ -16,7 +16,7 @@ machine running Docker Compose:
 - VictoriaMetrics (single-node) for metrics
 - Loki (monolithic) for logs, with chunks and indexes in Backblaze B2
 - Grafana for dashboards and alerting
-- Caddy and `cloudflared` for the edge
+- Host nginx and certbot for the edge
 
 The collection layer stays on-premises:
 
@@ -27,7 +27,7 @@ The collection layer stays on-premises:
 This split is deliberate. The collectors depend on the private `10.2.0.0/24`
 network, Technitium DNS, and NFS/LINSTOR-backed PVCs. Moving them to OCI would
 require a new site-to-site VPN and would make collection fragile. Remote write
-and Loki push are outbound-only and fit the existing Cloudflare Tunnel model.
+and Loki push are outbound-only and fit the existing nginx/certbot model.
 
 ### Non-goals
 
@@ -73,10 +73,10 @@ On-premises k3s
   node_exporter / technitium-sd (unchanged)          |
                                                      |
                                                      v
-OCI VM (Docker Compose)
-  cloudflared -> Caddy -> Grafana:3000
-                      -> VictoriaMetrics:8428  (/api/v1/write only)
-                      -> Loki:3100             (/loki/api/v1/push only)
+OCI VM (Docker Compose + host nginx/certbot)
+  nginx:443 (Let's Encrypt) -> 127.0.0.1:3000  Grafana
+                            -> 127.0.0.1:8428  VictoriaMetrics (/api/v1/write only)
+                            -> 127.0.0.1:3100  Loki (/loki/api/v1/push only)
 
   Block volume: /srv/monitoring/vmdata, /srv/monitoring/lokidata
   Backblaze B2: Loki chunks and TSDB indexes
@@ -84,14 +84,15 @@ OCI VM (Docker Compose)
 
 Design properties:
 
-- No inbound port is required for Grafana or ingestion when Cloudflare Tunnel is
-  used. The public IP is used for SSH (restricted) and outbound connectivity.
-- Caddy is the only origin. It terminates no TLS when Cloudflare Tunnel is used;
-  Cloudflare terminates TLS at the edge.
-- Grafana is protected by Cloudflare Access. Ingestion endpoints use Caddy
-  Basic Auth plus path restrictions, not Cloudflare Access, because Fluent Bit
-  and `vmagent` need simple HTTP credentials.
-- VictoriaMetrics and Loki are reachable only on the private Compose network.
+- nginx and certbot are already used on this VM for other services. The
+  monitoring stack reuses them; `cloudflared` and Caddy are not used.
+- nginx terminates TLS on 80/443 with Let's Encrypt certificates. DNS records
+  are already assigned to the OCI public IP.
+- Grafana, VictoriaMetrics, and Loki bind to `127.0.0.1` only; nginx is the only
+  public origin. Ingestion endpoints use nginx Basic Auth plus path
+  restrictions.
+- Grafana uses its own login. There is no Cloudflare Access in front; put nginx
+  Basic Auth or an IP allowlist in front of Grafana as a second layer.
 - The alerting plane (Grafana and its external notification path) runs outside
   the homelab, so a homelab outage does not silence alerts. This requires
   absent-data and heartbeat rules; see
@@ -103,11 +104,12 @@ Design properties:
 | --- | --- |
 | Shape | `VM.Standard.A1.Flex`, 4 OCPU, 24 GB RAM |
 | OS | Ubuntu 24.04 LTS |
-| Public IP | Reserved, if available; otherwise record the ephemeral IP and treat DNS carefully |
+| Public IP | Reserved, if available; DNS records are already assigned |
 | Boot volume | 50 GiB |
-| Block volume | 150 GiB, mounted at `/srv/monitoring` |
+| Metrics volume | 50 GiB, mounted at `/srv/monitoring/vmdata` |
+| Loki local volume | 50 GiB, mounted at `/srv/monitoring/lokidata` |
 | VCN | Public subnet; no peering to the on-premises network |
-| NSG ingress | TCP 22 from the administrator CIDR only; no 80/443 when using Cloudflare Tunnel |
+| NSG ingress | TCP 80/443 from `0.0.0.0/0`; TCP 22 from the administrator CIDR only |
 | NSG egress | All destinations |
 | Backup | OCI block volume daily backup, 7-14 day retention |
 | Time sync | chrony; verify before starting Loki and VictoriaMetrics |
@@ -115,28 +117,26 @@ Design properties:
 Reserved public IPs may incur a charge depending on the OCI tenancy; verify the
 current pricing before reserving one.
 
-Outbound transfer from OCI to B2 and Cloudflare counts toward OCI egress. The
-Always Free allowance is 10 TB/month; verify the current limit before relying on
-it.
+Outbound transfer from OCI to B2 counts toward OCI egress. The Always Free
+allowance is 10 TB/month; verify the current limit before relying on it.
 
-The 200 GiB Always Free block storage allowance is consumed as:
+Storage layout:
 
 ```text
-Boot       50 GiB
-Metrics   100 GiB  /srv/monitoring/vmdata
-Loki local 50 GiB  /srv/monitoring/lokidata
-Total     200 GiB
+Boot          50 GiB
+Metrics       50 GiB  /srv/monitoring/vmdata
+Loki local    50 GiB  /srv/monitoring/lokidata
+Total block  150 GiB  (50 GiB remains under the 200 GiB Always Free limit)
 ```
 
-If metrics grow beyond 100 GiB, either move Loki's local directories to the boot
-volume and give metrics 150 GiB, or pay for an additional 50 GiB block volume.
-Do not let the boot volume fill with Docker images and container logs; configure
-Docker log rotation and monitor `/` separately.
+Storage provisioning is manual in this change: create and mount the two 50 GiB
+volumes (or partitions) by hand, add them to `/etc/fstab` with `nofail`, and do
+not add automation for partitioning in this migration.
 
-A single 150 GiB filesystem lets Loki's local directories consume space intended
-for metrics. Partition the volume or use separate volumes if hard isolation
-between the 100 GiB metrics and 50 GiB Loki-local budgets matters. Otherwise,
-monitor both directories and set alerts before either fills the shared volume.
+The 50 GiB metrics volume is only 25% larger than the current 40 GiB for 180
+days. Monitor it closely; if series count or retention grows, either reduce
+retention or add a volume. Do not let the boot volume fill with Docker images
+and container logs; configure Docker log rotation and monitor `/` separately.
 
 ### Public IP and SSH
 
@@ -144,12 +144,12 @@ The VM has a public IP. Treat it as an Internet-facing host:
 
 - SSH key only; disable password authentication.
 - Restrict TCP 22 in the NSG to a stable administrator CIDR. If the administrator
-  IP is dynamic, use Cloudflare Tunnel SSH, Tailscale, or OCI Bastion instead of
-  opening 22 to the world.
-- Do not publish Caddy, Grafana, VictoriaMetrics, or Loki ports on the host.
-- If direct HTTPS is chosen instead of Cloudflare Tunnel, allow 443 only from
-  Cloudflare IP ranges and use Caddy with a DNS-01 or HTTP-01 certificate. This
-  is more moving parts than the tunnel and is not the default recommendation.
+  IP is dynamic, use Tailscale, WireGuard, or OCI Bastion instead of opening 22
+  to the world.
+- Publish only nginx on 80/443. Grafana, VictoriaMetrics, and Loki bind to
+  `127.0.0.1` and are proxied by nginx.
+- certbot uses the HTTP-01 challenge, so port 80 must be reachable from the
+  Internet. Keep the DNS records pointed at the OCI public IP.
 - Use a reserved public IP if the OCI tenancy supports it, so DNS and SSH
   allowlists do not break on stop/start.
 
@@ -163,8 +163,8 @@ The VM has a public IP. Treat it as an Internet-facing host:
 ├── .env.tpl                  # op:// references, committed
 ├── secrets/
 │   └── grafana_admin_password  # chmod 600, never committed
-├── caddy/
-│   └── Caddyfile
+├── nginx/
+│   └── monitoring.conf.example  # reference config; host nginx is configured manually
 ├── loki/
 │   └── loki-config.yaml
 ├── grafana/
@@ -183,12 +183,13 @@ Services:
 
 | Service | Image | Purpose | Persistence |
 | --- | --- | --- | --- |
-| `cloudflared` | `cloudflare/cloudflared:<pin>` | Outbound tunnel connector | none |
-| `caddy` | `caddy:2.9` | Reverse proxy, Basic Auth, path restrictions | `caddy_data` |
 | `grafana` | `grafana/grafana:<pin>` | UI and alerting | `/srv/monitoring/grafanadata` |
 | `victoriametrics` | `victoriametrics/victoria-metrics:<pin>` | Metrics storage | `/srv/monitoring/vmdata` |
 | `loki` | `grafana/loki:<pin>` | Log storage | `/srv/monitoring/lokidata` |
 | `node-exporter` | `prom/node-exporter:<pin>` | OCI VM self-monitoring | none |
+
+nginx and certbot are host services, not Compose services. They are already used
+on this VM for other applications.
 
 Pin exact image tags. Do not use `latest`. Record the currently deployed image
 tags from the cluster before choosing the target versions:
@@ -204,25 +205,6 @@ Compose skeleton:
 name: monitoring
 
 services:
-  cloudflared:
-    image: cloudflare/cloudflared:<pin>
-    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
-    restart: unless-stopped
-    depends_on:
-      - caddy
-
-  caddy:
-    image: caddy:2.9
-    env_file:
-      - .env
-    volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
-      interval: 30s
-
   victoriametrics:
     image: victoriametrics/victoria-metrics:<pin>
     command:
@@ -230,6 +212,8 @@ services:
       - -retentionPeriod=6
       - -httpListenAddr=:8428
       - -dedup.minScrapeInterval=60s
+    ports:
+      - "127.0.0.1:8428:8428"
     volumes:
       - /srv/monitoring/vmdata:/victoria-metrics-data
     restart: unless-stopped
@@ -242,6 +226,8 @@ services:
     command: -config.file=/etc/loki/loki-config.yaml -config.expand-env=true
     env_file:
       - .env
+    ports:
+      - "127.0.0.1:3100:3100"
     volumes:
       - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
       - /srv/monitoring/lokidata:/var/loki
@@ -270,22 +256,18 @@ services:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
       interval: 30s
 
-volumes:
-  caddy_data:
-
 secrets:
   grafana_admin_password:
     file: ./secrets/grafana_admin_password
 ```
 
-No public ports are published. Grafana binds only `127.0.0.1:3000` so local
-health checks and the deploy script can reach it; external traffic still goes
-through `cloudflared` and Caddy. `cloudflared` reaches `caddy:8080` over the
-Compose network. Grafana reaches VictoriaMetrics and Loki by service name.
+No application port is published on the public interface. Grafana,
+VictoriaMetrics, and Loki bind only to `127.0.0.1`; host nginx proxies to them.
+Grafana reaches VictoriaMetrics and Loki by service name over the Compose
+network.
 
-Set `GRAFANA_ROOT_URL` to `https://grafana-oci.<domain>` during validation and
-change it to the production hostname at cutover. Add the production host route
-to the Caddyfile at the same time.
+Set `GRAFANA_ROOT_URL` to the production hostname. DNS records are already
+assigned to the OCI public IP.
 
 Create a systemd unit so the stack starts at boot:
 
@@ -311,92 +293,130 @@ This simple unit assumes `.env` already exists. If secrets are generated from
 1Password, use the `ExecStartPre` unit in
 [Secrets management with 1Password](#secrets-management-with-1password).
 
-## Caddy and Cloudflare Tunnel
+nginx and certbot are managed by the host:
 
-Create a dedicated Cloudflare Tunnel for the OCI stack. Do not reuse the
-on-premises tunnel token; a separate tunnel makes rollback and DNS ownership
-explicit.
+```bash
+sudo systemctl enable --now nginx
+sudo systemctl enable --now certbot.timer
+```
+
+## nginx and certbot
+
+nginx and certbot are already used on this VM for other services. Add the
+monitoring server blocks to the existing nginx configuration; do not add another
+proxy layer.
 
 Suggested hostnames:
 
 | Hostname | Origin | Protection |
 | --- | --- | --- |
-| `grafana-oci.<domain>` | `http://caddy:8080` | Cloudflare Access |
-| `vm-ingest.<domain>` | `http://caddy:8080` | Caddy Basic Auth, path restricted |
-| `loki-ingest.<domain>` | `http://caddy:8080` | Caddy Basic Auth, path restricted |
+| `grafana.<domain>` | `http://127.0.0.1:3000` | nginx Basic Auth or IP allowlist + Grafana login |
+| `vm-ingest.<domain>` | `http://127.0.0.1:8428` | nginx Basic Auth, path restricted |
+| `loki-ingest.<domain>` | `http://127.0.0.1:3100` | nginx Basic Auth, path restricted |
 
-`grafana-oci` is the validation hostname. The production `grafana-k8s` record is
-switched only at cutover.
+DNS records for these hostnames are already assigned to the OCI public IP.
+certbot uses the HTTP-01 challenge, so port 80 must be reachable.
 
-Caddyfile:
+nginx server blocks (adapt paths and certificate names):
 
-```caddyfile
-{
-  auto_https off
+```nginx
+server {
+    listen 80;
+    server_name grafana.example.com vm-ingest.example.com loki-ingest.example.com;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
 }
 
-:8080 {
-  @health {
-    path /healthz
-    remote_ip 127.0.0.1 ::1
-  }
-  handle @health {
-    respond "ok" 200
-  }
+server {
+    listen 443 ssl http2;
+    server_name grafana.example.com;
 
-  @grafana host grafana-oci.lapis-dev.work
-  handle @grafana {
-    reverse_proxy grafana:3000
-  }
+    ssl_certificate     /etc/letsencrypt/live/grafana.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/grafana.example.com/privkey.pem;
 
-  @vmpush {
-    host vm-ingest.lapis-dev.work
-    path /api/v1/write
-  }
-  handle @vmpush {
-    basic_auth {
-      ingest <bcrypt-hash>
+    auth_basic "Grafana";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
-    reverse_proxy victoriametrics:8428
-  }
+}
 
-  @lokipush {
-    host loki-ingest.lapis-dev.work
-    path /loki/api/v1/push
-  }
-  handle @lokipush {
-    basic_auth {
-      ingest <bcrypt-hash>
+server {
+    listen 443 ssl http2;
+    server_name vm-ingest.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/vm-ingest.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/vm-ingest.example.com/privkey.pem;
+
+    location = /api/v1/write {
+        auth_basic "vmagent";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        proxy_pass http://127.0.0.1:8428;
     }
-    reverse_proxy loki:3100
-  }
 
-  respond 404
+    location / {
+        return 404;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name loki-ingest.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/loki-ingest.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/loki-ingest.example.com/privkey.pem;
+
+    location = /loki/api/v1/push {
+        auth_basic "fluent-bit";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        proxy_pass http://127.0.0.1:3100;
+    }
+
+    location / {
+        return 404;
+    }
 }
 ```
 
-Generate the bcrypt hash with:
+Create the Basic Auth file:
 
 ```bash
-docker run --rm caddy:2.9 caddy hash-password --plaintext '<secret>'
+sudo htpasswd -c /etc/nginx/.htpasswd vmagent
+sudo htpasswd /etc/nginx/.htpasswd fluent-bit
+sudo htpasswd /etc/nginx/.htpasswd grafana
 ```
 
-Store the hash in the Caddyfile or inject it with `{$INGEST_PASSWORD_HASH}`.
-Never commit the plaintext password. In the Cloudflare Zero Trust dashboard,
-point the `grafana-oci`, `vm-ingest`, and `loki-ingest` public hostnames at
-`http://caddy:8080`.
+Store the passwords in 1Password. Generate `/etc/nginx/.htpasswd` at deploy time
+or keep it as a root-owned file outside Git. Never commit the plaintext or the
+hash file.
 
-The Caddyfile above implements these restrictions:
+Obtain certificates:
+
+```bash
+sudo certbot certonly --webroot -w /var/www/html \
+  -d grafana.example.com -d vm-ingest.example.com -d loki-ingest.example.com
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+The nginx configuration above implements these restrictions:
 
 - `vm-ingest` allows only `/api/v1/write`. Query endpoints stay internal.
 - `loki-ingest` allows only `/loki/api/v1/push`. `/ready` and `/metrics` stay
   internal; use the Compose healthcheck instead.
 - Everything else returns 404, so management APIs are not reachable.
-- `/healthz` is a local Caddy health endpoint for the Compose healthcheck.
-
-At cutover, add a `grafana-k8s.<domain>` host route that points to the same
-Grafana upstream. Keep the `grafana-oci` route until rollback is no longer
-needed.
+- Grafana is protected by nginx Basic Auth plus Grafana's own login. There is no
+  Cloudflare Access layer in this design.
 
 ## VictoriaMetrics
 
@@ -721,8 +741,8 @@ becoming 0. Add:
 - `noDataState: Alerting` and `execErrState: Alerting` on critical rules.
 - External uptime checks on Grafana and the ingest endpoints, plus a
   dead-man's switch that notifies Discord if the OCI stack itself stops.
-- A secondary notification path (email or SMS) in case Discord or Cloudflare is
-  unavailable.
+- A secondary notification path (email or SMS) in case Discord or the public
+  network is unavailable.
 
 Without these, moving Grafana to OCI gives you a dashboard that is up during an
 outage but may not tell you that the homelab is down.
@@ -763,11 +783,10 @@ jobs:
           docker compose \
             --env-file oci/monitoring/ci/test.env \
             -f oci/monitoring/compose.yaml config -q
-      - name: Caddy validate
+      - name: nginx config reference
         run: |
-          docker run --rm \
-            -v "$PWD/oci/monitoring/caddy:/etc/caddy:ro" \
-            caddy:2.9 caddy validate --config /etc/caddy/Caddyfile
+          # Host nginx is validated on the VM with `nginx -t` during deploy.
+          test -f oci/monitoring/nginx/monitoring.conf.example
       - name: Loki config
         run: |
           docker run --rm \
@@ -810,14 +829,12 @@ jobs:
       - name: Deploy
         env:
           SSH_KEY: ${{ secrets.MONITORING_SSH_KEY }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: ./oci/monitoring/ci/deploy.sh
 ```
 
-`ci/deploy.sh` runs on the GitHub runner, opens the SSH or Cloudflare Tunnel
-session, and invokes `/opt/monitoring/deploy.sh` on the VM. The VM script is the
-only code that touches Docker:
+`ci/deploy.sh` runs on the GitHub runner, opens the SSH session, and invokes
+`/opt/monitoring/deploy.sh` on the VM. The VM script is the only code that
+touches Docker and host nginx:
 
 ```bash
 #!/usr/bin/env bash
@@ -829,6 +846,7 @@ git reset --hard origin/main
 
 docker compose pull
 docker compose up -d --wait --remove-orphans --force-recreate
+sudo nginx -t && sudo systemctl reload nginx
 
 docker compose ps
 curl -fsS http://127.0.0.1:3000/api/health >/dev/null
@@ -841,7 +859,7 @@ Notes:
   brief restart. Fluent Bit buffers cover the Loki restart; `vmagent` buffers
   cover the VictoriaMetrics restart. If restart-free reloads are preferred, call
   `POST /api/admin/provisioning/alerting/reload` for Grafana and restart Loki
-  and Caddy only when their configuration changed.
+  and reload nginx only when their configuration changed.
 - Save the previous SHA and `docker compose config` output under
   `/opt/monitoring/releases/` before deploying.
 - On failure, reset to the previous SHA and run `docker compose up -d --wait`.
@@ -851,7 +869,7 @@ Notes:
 GitHub-hosted runner IPs are not stable. Do not open TCP 22 to `0.0.0.0/0`.
 Choose one:
 
-1. Cloudflare Tunnel SSH with Access service tokens.
+1. SSH over the public IP, restricted to a stable administrator CIDR.
 2. Tailscale or WireGuard; attach the runner to the tailnet.
 3. Self-hosted runner on-premises with a restricted SSH allowlist.
 
@@ -865,7 +883,7 @@ sudoers rule limited to `deploy.sh`.
   [Secrets management with 1Password](#secrets-management-with-1password)) or
   with SOPS + age / Ansible Vault.
 - GitHub Secrets contain only the 1Password service account token, or nothing
-  if Workload Identity is used. SSH and Cloudflare credentials are loaded from
+  if Workload Identity is used. The SSH deploy credential is loaded from
   1Password at deploy time.
 - Rotate the service account token, B2 application key, and ingest credentials
   periodically.
@@ -887,12 +905,14 @@ Current empirical anchor: 40 GiB for 180 days. The chart history moved from
 | ---: | ---: | ---: | ---: |
 | 50,000 | 13-19 GiB | 16-23 GiB | 50 GiB |
 | 100,000 | 26-39 GiB | 31-47 GiB | 60 GiB |
-| 150,000 | 39-58 GiB | 47-70 GiB | 100 GiB |
+| 150,000 | 39-58 GiB | 47-70 GiB | 50-70 GiB |
 | 200,000 | 52-78 GiB | 62-94 GiB | 100 GiB |
 | 300,000 | 78-117 GiB | 94-140 GiB | 150 GiB |
 
-100 GiB covers roughly 200,000 series at 1.5 bytes/sample plus overhead. If the
-cluster grows past that, move to 150 GiB or reduce retention.
+This plan uses a 50 GiB metrics volume. That covers the current 40 GiB for 180
+days with about 25% headroom, but it is tight if the series count grows past
+roughly 100,000-150,000. If usage approaches 80%, either add a volume or reduce
+retention.
 
 ### Logs
 
@@ -914,14 +934,15 @@ egress up to 3x average monthly storage, Class A/B/C API calls free.
 
 | Item | Size | Monthly |
 | --- | ---: | ---: |
-| OCI block (boot + metrics + Loki local) | 200 GiB | $0 within Always Free |
+| OCI block (boot + metrics + Loki local) | 150 GiB | $0 within Always Free |
 | B2 logs | 70 GB | about $0.42 |
 | B2 egress | up to 3x storage | $0 if within allowance |
 | **Total** | | **about $0.42/month** |
 
-If block storage exceeds 200 GiB, the overage is about $0.0425/GB/month. If logs
-reach 150 GB, B2 is about $0.97/month. Verify current OCI and B2 prices before
-committing; both can change.
+The 150 GiB layout leaves 50 GiB of headroom under the 200 GiB Always Free
+allowance. If block storage exceeds 200 GiB, the overage is about
+$0.0425/GB/month. If logs reach 150 GB, B2 is about $0.97/month. Verify current
+OCI and B2 prices before committing; both can change.
 
 ## Backblaze B2 Versioning and Lifecycle
 
@@ -1019,16 +1040,16 @@ Define recovery objectives before cutover:
 
 ## Security
 
-- Public IP: restrict SSH to a stable CIDR or use Cloudflare Tunnel SSH. Disable
-  password authentication. Consider `fail2ban`.
-- Do not publish Grafana, VictoriaMetrics, or Loki ports. Use Cloudflare Tunnel
-  and Caddy.
-- Grafana behind Cloudflare Access; ingest endpoints behind Caddy Basic Auth with
-  path restrictions. Cloudflare Access authenticates at the edge, but Grafana
-  still presents its own login unless `auth.proxy` is configured to trust
-  `Cf-Access-Authenticated-User-Email`. Either keep the double login or set
-  `GF_AUTH_PROXY_ENABLED=true`, `GF_AUTH_PROXY_HEADER_NAME`, and
-  `GF_AUTH_PROXY_AUTO_SIGN_UP=true`.
+- Public IP: restrict SSH to a stable CIDR. Disable password authentication.
+  Consider `fail2ban`.
+- Publish only nginx on 80/443. Grafana, VictoriaMetrics, and Loki bind to
+  `127.0.0.1` and are proxied by nginx.
+- Grafana is protected by nginx Basic Auth plus Grafana's own login. If you want
+  single sign-on, configure Grafana OAuth instead of relying on network position.
+- Ingest endpoints are restricted to exact paths (`/api/v1/write` and
+  `/loki/api/v1/push`) with nginx Basic Auth.
+- TLS certificates come from certbot. Keep `certbot.timer` enabled and monitor
+  renewal failures.
 - B2 application key scoped to the bucket with only `listFiles`, `readFiles`,
   `writeFiles`, and `deleteFiles`.
 - Docker images pinned by tag; optionally scan with Trivy in CI.
@@ -1052,8 +1073,7 @@ in GitHub or in a committed file.
 - A dedicated vault, for example `Homelab`, containing:
   - `Backblaze B2`: access key ID and secret access key
   - `Grafana`: admin password and Discord webhook URL
-  - `Cloudflare`: tunnel token and Access service token
-  - `Caddy`: ingest password hash
+  - `nginx`: vmagent and Fluent Bit ingest passwords
 - A Service Account with read-only access to only that vault.
 - The service account token stored on the VM, mode `0600`, outside Git.
 
@@ -1062,11 +1082,12 @@ in GitHub or in a committed file.
 ```text
 1Password vault
   ├─ OCI VM: op inject -> .env (0600) -> docker compose
-  └─ GitHub Actions: load-secrets-action -> SSH key + Cloudflare Access token
+  └─ GitHub Actions: load-secrets-action -> SSH deploy key
 ```
 
-GitHub Actions loads only deploy credentials. B2 keys, Discord webhook, and the
-Grafana admin password are fetched by the OCI VM at start time.
+GitHub Actions loads only the SSH deploy credential. B2 keys, Discord webhook,
+the Grafana admin password, and the nginx ingest passwords are fetched by the
+OCI VM at start time.
 
 ### `.env.tpl`
 
@@ -1078,8 +1099,6 @@ B2_ACCESS_KEY_ID={{ op://Homelab/backblaze-b2/access-key-id }}
 B2_SECRET_ACCESS_KEY={{ op://Homelab/backblaze-b2/secret-access-key }}
 DISCORD_WEBHOOK_URL={{ op://Homelab/grafana/discord-webhook-url }}
 GRAFANA_ROOT_URL=https://grafana-oci.lapis-dev.work
-CF_TUNNEL_TOKEN={{ op://Homelab/cloudflare/tunnel-token }}
-INGEST_PASSWORD_HASH={{ op://Homelab/caddy/ingest-password-hash }}
 ```
 
 Generate the real `.env` at start:
@@ -1091,6 +1110,16 @@ chmod 600 /opt/monitoring/.env
 
 Do not commit `.env`. Add `.env`, `.env.*` (except `.env.example` and
 `.env.tpl`), and `secrets/` to `.gitignore`.
+
+The nginx Basic Auth passwords are not part of `.env`. Generate
+`/etc/nginx/.htpasswd` from 1Password at deploy time:
+
+```bash
+op read 'op://Homelab/nginx/vmagent-password' \
+  | sudo htpasswd -i /etc/nginx/.htpasswd vmagent
+op read 'op://Homelab/nginx/fluent-bit-password' \
+  | sudo htpasswd -i /etc/nginx/.htpasswd fluent-bit
+```
 
 ### Grafana admin secret
 
@@ -1144,8 +1173,6 @@ token is loaded from a plain file.
   env:
     OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
     SSH_KEY: op://Homelab/oci/deploy-ssh-key?ssh-format=openssh
-    CF_ACCESS_CLIENT_ID: op://Homelab/cloudflare/access-client-id
-    CF_ACCESS_CLIENT_SECRET: op://Homelab/cloudflare/access-client-secret
 ```
 
 Workload Identity can replace the long-lived service account token:
@@ -1188,12 +1215,13 @@ on-premises data ages out under the existing retention policy.
 
 ### Phase 0: Preflight
 
-- Record current image tags for VictoriaMetrics, Loki, Grafana, Caddy, and
-  `cloudflared`.
+- Record current image tags for VictoriaMetrics, Loki, and Grafana, plus the
+  host nginx and certbot versions.
 - Measure metrics series count, Loki bytes received per day, and PVC usage.
 - Confirm OCI A1 capacity, public IP, block volume, and NSG.
 - Create the B2 bucket, application key, and lifecycle rule.
-- Lower the Cloudflare DNS TTL for the Grafana hostname to 60 seconds.
+- Confirm the DNS A/AAAA records for the Grafana and ingest hostnames point to
+  the OCI public IP.
 - Take a fresh OCI block volume backup and an on-premises backup.
 - Schedule a maintenance window for the Grafana DNS cutover.
 
@@ -1203,7 +1231,7 @@ on-premises data ages out under the existing retention policy.
 2. Attach and mount the block volume at `/srv/monitoring` with `nofail`.
 3. Install Docker Engine and the Compose plugin.
 4. Create `/opt/monitoring` and the directory layout.
-5. Create the Cloudflare Tunnel and validation hostnames.
+5. Create the nginx server blocks and obtain certbot certificates.
 6. Configure the systemd unit.
 
 Validation:
@@ -1232,7 +1260,7 @@ systemctl status monitoring
    curl -fsS http://127.0.0.1:3000/api/health
    ```
 
-5. Open `https://grafana-oci.<domain>` through Cloudflare Access.
+5. Open `https://grafana.<domain>` through nginx (Basic Auth plus Grafana login).
 6. Verify datasources, dashboards, and alert rules loaded.
 
 ### Phase 3: Metrics path
@@ -1273,9 +1301,10 @@ systemctl status monitoring
 2. During dual-write, keep OCI rules `isPaused: true` and on-premises alerting
    active. At cutover, set OCI rules to `isPaused: false` and disable the
    on-premises Discord contact point. Do not run both notification paths at once.
-3. Disable the on-premises Grafana Ingress so the Cloudflare controller stops
-   managing the DNS record.
-4. Change `grafana-k8s.<domain>` to the OCI tunnel.
+3. DNS records are already assigned. If the production Grafana hostname still
+   points to on-premises, update its A/AAAA record to the OCI public IP;
+   otherwise no DNS change is needed.
+4. Enable and reload the production nginx server block and certificate.
 5. Keep the on-premises Grafana read-only for rollback.
 6. Send a test alert and confirm Discord delivery.
 
@@ -1301,7 +1330,7 @@ After 2-4 weeks of stable operation:
 
 Rollback path:
 
-1. Revert the DNS record to the on-premises tunnel or Ingress.
+1. Revert the DNS record to on-premises if it was changed.
 2. Remove the OCI `remoteWrite` and Loki outputs.
 3. Re-enable the on-premises Discord contact point.
 4. Keep the OCI VM for investigation; do not delete it during the rollback window.
@@ -1331,7 +1360,7 @@ initial copy, so there is no gap at all.
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
 | B2 lifecycle disabled | Storage grows without bound; B2 performance degrades | Enable the minimal lifecycle rule or run an external cleanup job |
-| Public IP exposure | SSH or service compromise | NSG allowlist, key-only SSH, no published service ports, Cloudflare Tunnel |
+| Public IP exposure | SSH or service compromise | NSG allowlist, key-only SSH, publish only nginx on 80/443 |
 | Single OCI VM failure | Monitoring unavailable until restore | Daily backups, restore drill, external uptime check, accepted SPOF |
 | Loki/B2 query latency | Slow dashboards and investigations | Test before cutover, reduce retention, larger chunks, query limits |
 | Loki version incompatibility | Failed startup or unreadable data | Pin the image, run `-verify-config`, test S3 writes |
@@ -1364,7 +1393,7 @@ operations.
 The hybrid plan adds operational complexity:
 
 - Two monitoring stacks during the validation window.
-- A public IP and a second Cloudflare Tunnel.
+- A public nginx on 80/443.
 - A separate Docker Compose deployment and CI/CD path.
 - B2 lifecycle and query-latency tuning.
 
@@ -1392,20 +1421,21 @@ backup-only design is smaller.
    minimal rule that deletes only hidden versions, or add an external cleanup job.
    This is the single most important correction.
 2. **Public IP lockdown.** A public IP is acceptable only with a restrictive NSG,
-   key-only SSH, and no published service ports. Do not expose Caddy, Grafana,
+   key-only SSH, and publish only nginx on 80/443. Do not expose Grafana,
    VictoriaMetrics, or Loki directly.
 3. **Backup and restore.** Single-VM operation is accepted, but the RTO must be
    explicit and tested. Daily block volume backups plus a quarterly restore drill
    are the minimum.
-4. **Secure CI/CD path.** GitHub-hosted runner IPs are not stable. Use Cloudflare
-   Tunnel SSH, Tailscale, or a self-hosted runner; do not open SSH to the world.
+4. **Secure CI/CD path.** GitHub-hosted runner IPs are not stable. Use SSH over
+   the public IP with a stable administrator CIDR, Tailscale, or a self-hosted
+   runner; do not open SSH to the world.
 5. **Loki/B2 validation.** Test query latency, `zstd` CPU cost, and S3 writes with
    the pinned image before cutover. Fall back to `gzip` if CPU is a problem.
 6. **Alert duplication.** Pause alerting on one Grafana instance during
    dual-write. Test a synthetic alert end to end.
-7. **DNS sequencing.** The on-premises Cloudflare controller owns the current
-   Grafana record. Disable that Ingress before changing DNS, and keep the old
-   record for rollback.
+7. **DNS sequencing.** DNS records are already assigned. Confirm the Grafana
+   and ingest records point to the OCI public IP before cutover, and keep the
+   previous values for rollback.
 8. **Absent-data and heartbeat alerting.** Threshold rules alone will not fire
    when the on-premises collector dies. Add the rules and heartbeat described in
    [Alerting during a homelab outage](#alerting-during-a-homelab-outage).
@@ -1421,8 +1451,8 @@ backup-only design is smaller.
   local block volume may be a better trade-off despite the higher price.
 - Docker Compose is not GitOps. Drift is possible if someone edits files on the
   VM. The deploy script resets to `origin/main`, and manual edits are prohibited.
-- The Always Free 200 GiB block allowance is exactly consumed. Any growth requires
-  a paid volume or a retention reduction.
+- The 50 GiB metrics volume is tight. Growth requires a paid volume or a
+  retention reduction.
 
 ### Verdict
 
@@ -1431,11 +1461,40 @@ is bounded, the public IP is locked down, backups and restore are tested, and th
 CI/CD path is secured. Without those four corrections, the plan has an unbounded
 storage cost and an unnecessary Internet exposure.
 
+## Future Work
+
+### Push-based node-exporter metrics
+
+The current design is pull-based: `vmagent` scrapes node exporters on port 9100,
+using Technitium HTTP SD for VM discovery. A future change could move this to a
+push model where an agent on each VM writes metrics to VictoriaMetrics remote
+write.
+
+Benefits:
+
+- No inbound scrape path from the cluster to the VM network.
+- Simpler firewall rules and better support for NAT or roaming VMs.
+- The collection path becomes outbound-only, matching the OCI migration.
+
+Work required:
+
+- Choose and deploy a push agent (for example `vmagent` in push mode or a
+  Telegraf/graphite-style agent).
+- Add local buffering and retry for network outages.
+- Authenticate the push endpoint with the same nginx Basic Auth pattern.
+- Control cardinality and label churn from the agent.
+- Dual-run pull and push collection, compare series and sample rates, then
+  remove the pull path.
+
+This is intentionally **not implemented** in the current migration. It is a
+separate change with its own validation and rollback plan.
+
 ## Open Questions
 
 - B2 region and endpoint; choose the region closest to the OCI VM.
 - OCI region and whether a reserved public IP is available.
-- Production Grafana hostname and Cloudflare Access identity provider.
+- Production Grafana hostname and nginx authentication strategy.
+- certbot renewal monitoring and alert ownership.
 - Whether to keep a 14-30 day local `vmsingle` buffer after cutover.
 - Whether 6-month log retention is worth the B2 query latency, or 90 days is
   sufficient.
@@ -1449,14 +1508,14 @@ storage cost and an unnecessary Internet exposure.
 - [ ] Metrics series count and Loki bytes/day measured.
 - [ ] B2 bucket, scoped application key, and lifecycle rule verified.
 - [ ] OCI VM, public IP, NSG, boot volume, and block volume verified.
-- [ ] Cloudflare Tunnel and validation hostnames created.
+- [ ] nginx server blocks and certbot certificates created.
 - [ ] DNS TTL lowered to 60 seconds.
 - [ ] Backups taken and restore path documented.
 
 ### Deployment
 
 - [ ] `docker compose config -q` passes.
-- [ ] Caddy validate passes.
+- [ ] `nginx -t` passes and nginx reloaded.
 - [ ] Loki `-verify-config` passes.
 - [ ] Grafana provisioning smoke test passes.
 - [ ] `docker compose up -d --wait` healthy.

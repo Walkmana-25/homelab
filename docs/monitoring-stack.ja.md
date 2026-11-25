@@ -13,7 +13,7 @@ English version: [monitoring-stack.md](monitoring-stack.md)
 - メトリクス: VictoriaMetrics（シングルノード）
 - ログ: Loki（モノリシック）。チャンクとインデックスは Backblaze B2
 - ダッシュボードとアラート: Grafana
-- エッジ: Caddy と `cloudflared`
+- エッジ: ホストの nginx と certbot
 
 収集層はオンプレミスに残します。
 
@@ -21,7 +21,7 @@ English version: [monitoring-stack.md](monitoring-stack.md)
 - Fluent Bit はコンテナログと journald ログを収集し続けます。
 - `technitium-sd` は HTTP サービスディスカバリを提供し続けます。
 
-この分離は意図的なものです。収集系はプライベートネットワーク `10.2.0.0/24`、Technitium DNS、NFS/LINSTOR の PVC に依存しています。収集系まで OCI に移すと、サイト間 VPN の新設が必要になり、収集が不安定になります。リモートライトと Loki push はアウトバウンドのみで済むため、既存の Cloudflare Tunnel モデルと整合します。
+この分離は意図的なものです。収集系はプライベートネットワーク `10.2.0.0/24`、Technitium DNS、NFS/LINSTOR の PVC に依存しています。収集系まで OCI に移すと、サイト間 VPN の新設が必要になり、収集が不安定になります。リモートライトと Loki push はアウトバウンドのみで済むため、既存の nginx / certbot モデルと整合します。
 
 ### 目標外
 
@@ -63,10 +63,10 @@ Pod ログ:      Fluent Bit DaemonSet -> Loki
   node_exporter / technitium-sd（変更なし）           |
                                                       |
                                                       v
-OCI VM（Docker Compose）
-  cloudflared -> Caddy -> Grafana:3000
-                      -> VictoriaMetrics:8428  (/api/v1/write のみ)
-                      -> Loki:3100             (/loki/api/v1/push のみ)
+OCI VM（Docker Compose + ホスト nginx/certbot）
+  nginx:443 (Let's Encrypt) -> 127.0.0.1:3000  Grafana
+                            -> 127.0.0.1:8428  VictoriaMetrics (/api/v1/write のみ)
+                            -> 127.0.0.1:3100  Loki (/loki/api/v1/push のみ)
 
   ブロックボリューム: /srv/monitoring/vmdata, /srv/monitoring/lokidata
   Backblaze B2: Loki チャンクと TSDB インデックス
@@ -74,10 +74,10 @@ OCI VM（Docker Compose）
 
 設計上の特性:
 
-- Cloudflare Tunnel を使う場合、Grafana と取り込みにインバウンドポートは不要です。パブリック IP は SSH（制限付き）とアウトバウンド通信に使います。
-- Caddy が唯一のオリジンです。Cloudflare Tunnel を使う場合、Caddy は TLS を終端せず、Cloudflare がエッジで TLS を終端します。
-- Grafana は Cloudflare Access で保護します。取り込みエンドポイントは Caddy の Basic Auth とパス制限で保護します。Fluent Bit と `vmagent` は単純な HTTP 認証しか使えないためです。
-- VictoriaMetrics と Loki は Compose のプライベートネットワークからのみ到達可能です。
+- nginx と certbot は、この VM で他サービスに既に使っているものを再利用します。`cloudflared` と Caddy は使いません。
+- nginx が 80/443 で Let's Encrypt 証明書により TLS を終端します。DNS レコードは OCI のパブリック IP に既に割り当て済みです。
+- Grafana、VictoriaMetrics、Loki は `127.0.0.1` のみにバインドし、nginx だけが公開オリジンです。取り込みエンドポイントは nginx の Basic Auth とパス制限で保護します。
+- Grafana は独自ログインを使います。Cloudflare Access は置かないため、nginx の Basic Auth か IP 許可リストを二段目として置きます。
 - アラートプレーン（Grafana と外部通知経路）はホームラボの外で動くため、ホームラボ障害時にアラートが止まりません。これにはデータ欠損アラートとハートビートが必要です。[ホームラボ障害時のアラート](#ホームラボ障害時のアラート)を参照してください。
 
 ## OCI リソース設計
@@ -86,40 +86,41 @@ OCI VM（Docker Compose）
 | --- | --- |
 | シェイプ | `VM.Standard.A1.Flex`、4 OCPU、24 GB RAM |
 | OS | Ubuntu 24.04 LTS |
-| パブリック IP | 可能なら予約済み。それ以外は一時 IP を記録し、DNS を慎重に扱う |
+| パブリック IP | 可能なら予約済み。DNS レコードは割り当て済み |
 | ブートボリューム | 50 GiB |
-| ブロックボリューム | 150 GiB、`/srv/monitoring` にマウント |
+| メトリクスボリューム | 50 GiB、`/srv/monitoring/vmdata` にマウント |
+| Loki ローカルボリューム | 50 GiB、`/srv/monitoring/lokidata` にマウント |
 | VCN | パブリックサブネット。オンプレミスネットワークとのピアリングはなし |
-| NSG ingress | TCP 22 は管理者 CIDR のみ。Cloudflare Tunnel 使用時は 80/443 を開けない |
+| NSG ingress | TCP 80/443 は `0.0.0.0/0`、TCP 22 は管理者 CIDR のみ |
 | NSG egress | 全宛先 |
 | バックアップ | OCI ブロックボリュームの日次バックアップ、7〜14日保持 |
 | 時刻同期 | chrony。Loki と VictoriaMetrics の起動前に確認 |
 
 予約済みパブリック IP は OCI テナンシによっては課金される場合があります。予約前に現在の価格を確認してください。
 
-OCI から B2 と Cloudflare へのアウトバウンド転送は OCI の egress に計上されます。Always Free の上限は 10 TB/月です。現在の上限を確認してから依存してください。
+OCI から B2 へのアウトバウンド転送は OCI の egress に計上されます。Always Free の上限は 10 TB/月です。現在の上限を確認してから依存してください。
 
-Always Free の 200 GiB ブロックストレージ枠は次のように消費します。
+ストレージレイアウト:
 
 ```text
-ブート       50 GiB
-メトリクス   100 GiB  /srv/monitoring/vmdata
-Loki ローカル 50 GiB  /srv/monitoring/lokidata
-合計        200 GiB
+ブート          50 GiB
+メトリクス       50 GiB  /srv/monitoring/vmdata
+Loki ローカル    50 GiB  /srv/monitoring/lokidata
+合計ブロック   150 GiB  (Always Free 200 GiB のうち 50 GiB 残り)
 ```
 
-メトリクスが 100 GiB を超える場合は、Loki のローカルディレクトリをブートボリュームへ移してメトリクスに 150 GiB を割り当てるか、50 GiB のブロックボリュームを有償で追加します。ブートボリュームを Docker イメージやコンテナログで埋めないでください。Docker のログローテーションを設定し、`/` を別途監視します。
+ストレージの整備はこの変更では手動で行います。2つの 50 GiB ボリューム（またはパーティション）を作成してマウントし、`nofail` 付きで `/etc/fstab` に追加してください。パーティション分割の自動化はこの移行には入れません。
 
-単一の 150 GiB ファイルシステムでは、Loki のローカルディレクトリがメトリクス用の領域を圧迫する可能性があります。100 GiB のメトリクスと 50 GiB の Loki ローカルを厳密に分けたい場合は、ボリュームをパーティション分割するか、別ボリュームを使用してください。そうしない場合は、両ディレクトリを監視し、どちらかが共有ボリュームを埋める前にアラートを出します。
+50 GiB のメトリクスボリュームは、現在の 180日/40 GiB に対して約25%の余裕しかありません。密に監視し、系列数や保持期間が増えたら保持を短縮するかボリュームを追加してください。ブートボリュームを Docker イメージやコンテナログで埋めないでください。Docker のログローテーションを設定し、`/` を別途監視します。
 
 ### パブリック IP と SSH
 
 VM はパブリック IP を持ちます。インターネットに面したホストとして扱ってください。
 
 - SSH は鍵認証のみ。パスワード認証を無効化します。
-- NSG の TCP 22 は安定した管理者 CIDR のみに制限します。管理者 IP が動的な場合は、22 を全開にせず Cloudflare Tunnel SSH、Tailscale、OCI Bastion を使います。
-- Caddy、Grafana、VictoriaMetrics、Loki のポートをホストに公開しません。
-- Cloudflare Tunnel の代わりに直接 HTTPS を選ぶ場合は、443 を Cloudflare の IP レンジのみに許可し、Caddy に DNS-01 または HTTP-01 証明書を使います。Tunnel より構成要素が増えるため、既定の推奨ではありません。
+- NSG の TCP 22 は安定した管理者 CIDR のみに制限します。管理者 IP が動的な場合は、22 を全開にせず Tailscale、WireGuard、OCI Bastion を使います。
+- 公開するのは nginx の 80/443 だけです。Grafana、VictoriaMetrics、Loki は `127.0.0.1` にバインドし、nginx がプロキシします。
+- certbot は HTTP-01 チャレンジを使うため、ポート 80 への到達性が必要です。DNS レコードが OCI のパブリック IP を指していることを維持してください。
 - OCI テナンシが対応しているなら予約済みパブリック IP を使います。停止/起動で DNS や SSH の許可リストが壊れないようにするためです。
 
 ## Docker Compose 構成
@@ -132,8 +133,8 @@ VM はパブリック IP を持ちます。インターネットに面したホ�
 ├── .env.tpl                  # op:// 参照のみ（コミットする）
 ├── secrets/
 │   └── grafana_admin_password  # chmod 600、コミットしない
-├── caddy/
-│   └── Caddyfile
+├── nginx/
+│   └── monitoring.conf.example  # 参考設定。ホスト nginx は手動で設定
 ├── loki/
 │   └── loki-config.yaml
 ├── grafana/
@@ -152,12 +153,12 @@ VM はパブリック IP を持ちます。インターネットに面したホ�
 
 | サービス | イメージ | 目的 | 永続化 |
 | --- | --- | --- | --- |
-| `cloudflared` | `cloudflare/cloudflared:<pin>` | アウトバウンドトンネルコネクタ | なし |
-| `caddy` | `caddy:2.9` | リバースプロキシ、Basic Auth、パス制限 | `caddy_data` |
 | `grafana` | `grafana/grafana:<pin>` | UI とアラート | `/srv/monitoring/grafanadata` |
 | `victoriametrics` | `victoriametrics/victoria-metrics:<pin>` | メトリクス保存 | `/srv/monitoring/vmdata` |
 | `loki` | `grafana/loki:<pin>` | ログ保存 | `/srv/monitoring/lokidata` |
 | `node-exporter` | `prom/node-exporter:<pin>` | OCI VM 自身の監視 | なし |
+
+nginx と certbot はホストのサービスであり、Compose サービスではありません。この VM では他アプリ用に既に使っています。
 
 イメージタグは固定します。`latest` は使いません。対象バージョンを選ぶ前に、クラスタから現在デプロイされているイメージタグを記録します。
 
@@ -172,25 +173,6 @@ Compose の骨子:
 name: monitoring
 
 services:
-  cloudflared:
-    image: cloudflare/cloudflared:<pin>
-    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
-    restart: unless-stopped
-    depends_on:
-      - caddy
-
-  caddy:
-    image: caddy:2.9
-    env_file:
-      - .env
-    volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
-      interval: 30s
-
   victoriametrics:
     image: victoriametrics/victoria-metrics:<pin>
     command:
@@ -198,6 +180,8 @@ services:
       - -retentionPeriod=6
       - -httpListenAddr=:8428
       - -dedup.minScrapeInterval=60s
+    ports:
+      - "127.0.0.1:8428:8428"
     volumes:
       - /srv/monitoring/vmdata:/victoria-metrics-data
     restart: unless-stopped
@@ -210,6 +194,8 @@ services:
     command: -config.file=/etc/loki/loki-config.yaml -config.expand-env=true
     env_file:
       - .env
+    ports:
+      - "127.0.0.1:3100:3100"
     volumes:
       - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
       - /srv/monitoring/lokidata:/var/loki
@@ -238,17 +224,14 @@ services:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
       interval: 30s
 
-volumes:
-  caddy_data:
-
 secrets:
   grafana_admin_password:
     file: ./secrets/grafana_admin_password
 ```
 
-公開ポートはありません。Grafana は `127.0.0.1:3000` のみにバインドし、ローカルヘルスチェックとデプロイスクリプトから到達できるようにします。外部トラフィックは引き続き `cloudflared` と Caddy を経由します。`cloudflared` は Compose ネットワーク経由で `caddy:8080` に接続します。Grafana はサービス名で VictoriaMetrics と Loki に接続します。
+公開インターフェースにはアプリケーションポートを出しません。Grafana、VictoriaMetrics、Loki は `127.0.0.1` のみにバインドし、ホストの nginx がプロキシします。Grafana は Compose ネットワーク上のサービス名で VictoriaMetrics と Loki に接続します。
 
-検証中は `GRAFANA_ROOT_URL` を `https://grafana-oci.<domain>` に設定し、切り替え時に本番ホスト名へ変更します。同時に Caddyfile に本番ホストのルートを追加します。
+`GRAFANA_ROOT_URL` には本番ホスト名を設定します。DNS レコードは OCI のパブリック IP に既に割り当て済みです。
 
 スタックを起動時に立ち上げる systemd ユニットを作成します。
 
@@ -272,83 +255,123 @@ WantedBy=multi-user.target
 
 このシンプルなユニットは `.env` が既に存在することを前提にしています。1Password から秘密を生成する場合は、[1Password によるシークレット管理](#1password-によるシークレット管理)の `ExecStartPre` 付きユニットを使ってください。
 
-## Caddy と Cloudflare Tunnel
+nginx と certbot はホスト側で管理します:
 
-OCI スタック専用の Cloudflare Tunnel を作成します。オンプレミスのトンネルトークンを再利用しないでください。別トンネルにすることで、ロールバックと DNS の所有権が明確になります。
+```bash
+sudo systemctl enable --now nginx
+sudo systemctl enable --now certbot.timer
+```
+
+## nginx と certbot
+
+nginx と certbot は、この VM で他サービスに既に使っています。監視用の server block を既存の nginx 設定に追加し、別のプロキシ層を増やしません。
 
 推奨ホスト名:
 
 | ホスト名 | オリジン | 保護 |
 | --- | --- | --- |
-| `grafana-oci.<domain>` | `http://caddy:8080` | Cloudflare Access |
-| `vm-ingest.<domain>` | `http://caddy:8080` | Caddy Basic Auth、パス制限 |
-| `loki-ingest.<domain>` | `http://caddy:8080` | Caddy Basic Auth、パス制限 |
+| `grafana.<domain>` | `http://127.0.0.1:3000` | nginx Basic Auth または IP 許可リスト + Grafana ログイン |
+| `vm-ingest.<domain>` | `http://127.0.0.1:8428` | nginx Basic Auth、パス制限 |
+| `loki-ingest.<domain>` | `http://127.0.0.1:3100` | nginx Basic Auth、パス制限 |
 
-`grafana-oci` は検証用ホスト名です。本番の `grafana-k8s` レコードを切り替えるのはカットオーバー時のみです。
+これらのホスト名の DNS レコードは OCI のパブリック IP に既に割り当て済みです。certbot は HTTP-01 チャレンジを使うため、ポート 80 への到達性が必要です。
 
-Caddyfile:
+nginx の server block（パスと証明書名は環境に合わせて変更）:
 
-```caddyfile
-{
-  auto_https off
+```nginx
+server {
+    listen 80;
+    server_name grafana.example.com vm-ingest.example.com loki-ingest.example.com;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
 }
 
-:8080 {
-  @health {
-    path /healthz
-    remote_ip 127.0.0.1 ::1
-  }
-  handle @health {
-    respond "ok" 200
-  }
+server {
+    listen 443 ssl http2;
+    server_name grafana.example.com;
 
-  @grafana host grafana-oci.lapis-dev.work
-  handle @grafana {
-    reverse_proxy grafana:3000
-  }
+    ssl_certificate     /etc/letsencrypt/live/grafana.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/grafana.example.com/privkey.pem;
 
-  @vmpush {
-    host vm-ingest.lapis-dev.work
-    path /api/v1/write
-  }
-  handle @vmpush {
-    basic_auth {
-      ingest <bcrypt-hash>
+    auth_basic "Grafana";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
-    reverse_proxy victoriametrics:8428
-  }
+}
 
-  @lokipush {
-    host loki-ingest.lapis-dev.work
-    path /loki/api/v1/push
-  }
-  handle @lokipush {
-    basic_auth {
-      ingest <bcrypt-hash>
+server {
+    listen 443 ssl http2;
+    server_name vm-ingest.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/vm-ingest.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/vm-ingest.example.com/privkey.pem;
+
+    location = /api/v1/write {
+        auth_basic "vmagent";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        proxy_pass http://127.0.0.1:8428;
     }
-    reverse_proxy loki:3100
-  }
 
-  respond 404
+    location / {
+        return 404;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name loki-ingest.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/loki-ingest.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/loki-ingest.example.com/privkey.pem;
+
+    location = /loki/api/v1/push {
+        auth_basic "fluent-bit";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        proxy_pass http://127.0.0.1:3100;
+    }
+
+    location / {
+        return 404;
+    }
 }
 ```
 
-bcrypt ハッシュの生成:
+Basic Auth ファイルの作成:
 
 ```bash
-docker run --rm caddy:2.9 caddy hash-password --plaintext '<secret>'
+sudo htpasswd -c /etc/nginx/.htpasswd vmagent
+sudo htpasswd /etc/nginx/.htpasswd fluent-bit
+sudo htpasswd /etc/nginx/.htpasswd grafana
 ```
 
-ハッシュは Caddyfile に保存するか、`{$INGEST_PASSWORD_HASH}` で注入します。平文パスワードはコミットしません。Cloudflare Zero Trust のダッシュボードで、`grafana-oci`、`vm-ingest`、`loki-ingest` の公開ホスト名を `http://caddy:8080` に向けてください。
+パスワードは 1Password に保存します。`/etc/nginx/.htpasswd` はデプロイ時に生成するか、root 所有のファイルとして Git の外に置きます。平文もハッシュファイルもコミットしません。
 
-上の Caddyfile は次の制限を実装しています。
+証明書の取得:
+
+```bash
+sudo certbot certonly --webroot -w /var/www/html \
+  -d grafana.example.com -d vm-ingest.example.com -d loki-ingest.example.com
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+上の nginx 設定は次の制限を実装しています。
 
 - `vm-ingest` は `/api/v1/write` のみ許可。クエリエンドポイントは内部に留めます。
 - `loki-ingest` は `/loki/api/v1/push` のみ許可。`/ready` と `/metrics` は内部に留め、Compose のヘルスチェックを使います。
 - それ以外は 404 を返し、管理 API へ到達させません。
-- `/healthz` は Compose ヘルスチェック用のローカルエンドポイントです。
-
-カットオーバー時には、同じ Grafana アップストリームへ向ける `grafana-k8s.<domain>` のホストルートを追加します。ロールバックが不要になるまで `grafana-oci` ルートは残します。
+- Grafana は nginx Basic Auth と Grafana 自身のログインで保護します。この設計に Cloudflare Access はありません。
 
 ## VictoriaMetrics
 
@@ -633,7 +656,7 @@ Grafana を OCI に置く主な理由は、ホームラボ障害時にアラー�
   - ハートビートが5〜10分欠けたらアラートを出します。
 - 重要ルールに `noDataState: Alerting` と `execErrState: Alerting` を設定します。
 - Grafana と取り込みエンドポイントの外部 uptime check、および OCI スタック自体が止まったら Discord に通知する dead-man's switch。
-- Discord や Cloudflare が利用できない場合に備えた、メールや SMS の二次通知経路。
+- Discord や公開ネットワークが利用できない場合に備えた、メールや SMS の二次通知経路。
 
 これらがないと、Grafana を OCI に移しても、障害中にダッシュボードは上がっていても「ホームラーブが down している」と伝えられない可能性があります。
 
@@ -673,11 +696,10 @@ jobs:
           docker compose \
             --env-file oci/monitoring/ci/test.env \
             -f oci/monitoring/compose.yaml config -q
-      - name: Caddy validate
+      - name: nginx config reference
         run: |
-          docker run --rm \
-            -v "$PWD/oci/monitoring/caddy:/etc/caddy:ro" \
-            caddy:2.9 caddy validate --config /etc/caddy/Caddyfile
+          # ホスト nginx はデプロイ時に VM 上で `nginx -t` で検証します。
+          test -f oci/monitoring/nginx/monitoring.conf.example
       - name: Loki config
         run: |
           docker run --rm \
@@ -717,12 +739,10 @@ jobs:
       - name: Deploy
         env:
           SSH_KEY: ${{ secrets.MONITORING_SSH_KEY }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: ./oci/monitoring/ci/deploy.sh
 ```
 
-`ci/deploy.sh` は GitHub ランナー上で動き、SSH または Cloudflare Tunnel のセッションを開いて、VM 上の `/opt/monitoring/deploy.sh` を呼び出します。Docker に触るのは VM 側スクリプトだけです。
+`ci/deploy.sh` は GitHub ランナー上で動き、SSH セッションを開いて、VM 上の `/opt/monitoring/deploy.sh` を呼び出します。Docker とホスト nginx に触るのは VM 側スクリプトだけです。
 
 ```bash
 #!/usr/bin/env bash
@@ -734,6 +754,7 @@ git reset --hard origin/main
 
 docker compose pull
 docker compose up -d --wait --remove-orphans --force-recreate
+sudo nginx -t && sudo systemctl reload nginx
 
 docker compose ps
 curl -fsS http://127.0.0.1:3000/api/health >/dev/null
@@ -742,7 +763,7 @@ curl -fsS http://127.0.0.1:3000/api/health >/dev/null
 注意:
 
 - `docker compose up -d --wait` は全サービスに healthcheck が必要です。
-- `--force-recreate` はバインドマウントされた設定変更を適用しますが、短い再起動を伴います。Fluent Bit のバッファが Loki の再起動を吸収し、`vmagent` のバッファが VictoriaMetrics の再起動を吸収します。再起動なしの reload を選ぶなら、Grafana は `POST /api/admin/provisioning/alerting/reload`、Loki と Caddy は設定変更時のみ再起動します。
+- `--force-recreate` はバインドマウントされた設定変更を適用しますが、短い再起動を伴います。Fluent Bit のバッファが Loki の再起動を吸収し、`vmagent` のバッファが VictoriaMetrics の再起動を吸収します。再起動なしの reload を選ぶなら、Grafana は `POST /api/admin/provisioning/alerting/reload`、Loki は設定変更時のみ再起動し、nginx は reload します。
 - デプロイ前に現在の SHA と `docker compose config` の出力を `/opt/monitoring/releases/` に保存します。
 - 失敗時は前の SHA へ戻して `docker compose up -d --wait` を実行します。
 
@@ -750,7 +771,7 @@ curl -fsS http://127.0.0.1:3000/api/health >/dev/null
 
 GitHub ホスト型ランナーの IP は固定ではありません。TCP 22 を `0.0.0.0/0` に開けないでください。次から選びます。
 
-1. Cloudflare Tunnel SSH と Access サービストークン
+1. パブリック IP 経由の SSH。安定した管理者 CIDR に制限します。
 2. Tailscale または WireGuard。ランナーを tailnet に参加させる
 3. オンプレミスの self-hosted ランナーと制限付き SSH 許可リスト
 
@@ -759,7 +780,7 @@ GitHub ホスト型ランナーの IP は固定ではありません。TCP 22 �
 ### シークレット
 
 - ワークロードの秘密は VM 上の `/opt/monitoring/.env` に置き、モード `0600` にします。`.env.tpl` から `op inject` で生成するか（[1Password によるシークレット管理](#1password-によるシークレット管理)参照）、SOPS + age / Ansible Vault で管理します。
-- GitHub Secrets には 1Password の Service Account トークンのみを入れます。Workload Identity を使う場合は何も入れません。SSH 鍵と Cloudflare の資格情報はデプロイ時に 1Password から読み込みます。
+- GitHub Secrets には 1Password の Service Account トークンのみを入れます。Workload Identity を使う場合は何も入れません。SSH デプロイ鍵はデプロイ時に 1Password から読み込みます。
 - Service Account トークン、B2 アプリケーションキー、取り込み資格情報は定期的にローテーションします。
 
 ### イメージ更新
@@ -776,11 +797,11 @@ Renovate の `docker-compose` マネージャーでイメージタグ更新の P
 | ---: | ---: | ---: | ---: |
 | 50,000 | 13〜19 GiB | 16〜23 GiB | 50 GiB |
 | 100,000 | 26〜39 GiB | 31〜47 GiB | 60 GiB |
-| 150,000 | 39〜58 GiB | 47〜70 GiB | 100 GiB |
+| 150,000 | 39〜58 GiB | 47〜70 GiB | 50〜70 GiB |
 | 200,000 | 52〜78 GiB | 62〜94 GiB | 100 GiB |
 | 300,000 | 78〜117 GiB | 94〜140 GiB | 150 GiB |
 
-100 GiB は、1.5 B/サンプルとして約20万系列＋オーバーヘッドをカバーします。それ以上に増えるなら 150 GiB へ移すか保持期間を短縮します。
+この計画ではメトリクスに 50 GiB を使います。現在の 180日/40 GiB に対して約25%の余裕ですが、系列数が約10〜15万を超えると厳しくなります。80%に近づいたらボリューム追加か保持短縮を検討します。
 
 ### ログ
 
@@ -800,12 +821,12 @@ Renovate の `docker-compose` マネージャーでイメージタグ更新の P
 
 | 項目 | サイズ | 月額 |
 | --- | ---: | ---: |
-| OCI ブロック（ブート＋メトリクス＋Loki ローカル） | 200 GiB | Always Free 内で $0 |
+| OCI ブロック（ブート＋メトリクス＋Loki ローカル） | 150 GiB | Always Free 内で $0 |
 | B2 ログ | 70 GB | 約 $0.42 |
 | B2 egress | 保存量の3倍まで | 上限内なら $0 |
 | **合計** | | **約 $0.42/月** |
 
-ブロックストレージが 200 GiB を超えると超過分は約 $0.0425/GB/月です。ログが 150 GB に達すると B2 は約 $0.97/月 です。コミット前に OCI と B2 の現在価格を確認してください。価格は変わり得ます。
+150 GiB のレイアウトでは Always Free 200 GiB のうち 50 GiB が残ります。ブロックストレージが 200 GiB を超えると超過分は約 $0.0425/GB/月です。ログが 150 GB に達すると B2 は約 $0.97/月 です。コミット前に OCI と B2 の現在価格を確認してください。価格は変わり得ます。
 
 ## Backblaze B2 のバージョニングと Lifecycle
 
@@ -886,9 +907,11 @@ Lifecycle ルールが無効のままだと、この計画は上限を持ちま�
 
 ## セキュリティ
 
-- パブリック IP: SSH を安定した CIDR に制限するか Cloudflare Tunnel SSH を使います。パスワード認証を無効化します。`fail2ban` も検討します。
-- Grafana、VictoriaMetrics、Loki のポートを公開しません。Cloudflare Tunnel と Caddy を使います。
-- Grafana は Cloudflare Access の内側。取り込みエンドポイントは Caddy Basic Auth とパス制限の内側です。Cloudflare Access はエッジで認証しますが、Grafana 自体は `auth.proxy` で `Cf-Access-Authenticated-User-Email` を信頼するよう設定しない限り独自ログインを表示します。二重ログインでよいか、`GF_AUTH_PROXY_ENABLED=true`、`GF_AUTH_PROXY_HEADER_NAME`、`GF_AUTH_PROXY_AUTO_SIGN_UP=true` を設定してください。
+- パブリック IP: SSH を安定した CIDR に制限します。パスワード認証を無効化します。`fail2ban` も検討します。
+- 公開するのは nginx の 80/443 だけです。Grafana、VictoriaMetrics、Loki は `127.0.0.1` にバインドし、nginx がプロキシします。
+- Grafana は nginx Basic Auth と Grafana 自身のログインで保護します。SSO が必要なら Grafana の OAuth を設定してください。
+- 取り込みエンドポイントは正確なパス（`/api/v1/write` と `/loki/api/v1/push`）のみを nginx Basic Auth で許可します。
+- TLS 証明書は certbot が管理します。`certbot.timer` を有効にし、更新失敗を監視してください。
 - B2 アプリケーションキーはバケットスコープにし、`listFiles`、`readFiles`、`writeFiles`、`deleteFiles` のみ付与します。
 - Docker イメージはタグ固定。任意で CI に Trivy を入れます。
 - できるだけ非 root でコンテナを動かし、`privileged` は避けます。
@@ -907,8 +930,7 @@ Lifecycle ルールが無効のままだと、この計画は上限を持ちま�
 - 専用ボールト（例: `Homelab`）に次のアイテムを用意:
   - `Backblaze B2`: アクセスキー ID とシークレットアクセスキー
   - `Grafana`: 管理者パスワードと Discord webhook URL
-  - `Cloudflare`: トンネルトークンと Access サービストークン
-  - `Caddy`: 取り込みパスワードのハッシュ
+  - `nginx`: vmagent と Fluent Bit の取り込みパスワード
 - そのボールトだけに読み取り専用でアクセスできる Service Account。
 - Service Account トークンを VM 上に `0600` で保存し、Git の外に置く。
 
@@ -917,10 +939,10 @@ Lifecycle ルールが無効のままだと、この計画は上限を持ちま�
 ```text
 1Password vault
   ├─ OCI VM: op inject -> .env (0600) -> docker compose
-  └─ GitHub Actions: load-secrets-action -> SSH 鍵 + Cloudflare Access トークン
+  └─ GitHub Actions: load-secrets-action -> SSH デプロイ鍵
 ```
 
-GitHub Actions はデプロイ用の資格情報だけを読み込みます。B2 キー、Discord webhook、Grafana 管理者パスワードは OCI VM が起動時に取得します。
+GitHub Actions は SSH デプロイ鍵だけを読み込みます。B2 キー、Discord webhook、Grafana 管理者パスワード、nginx 取り込みパスワードは OCI VM が起動時に取得します。
 
 ### `.env.tpl`
 
@@ -932,8 +954,6 @@ B2_ACCESS_KEY_ID={{ op://Homelab/backblaze-b2/access-key-id }}
 B2_SECRET_ACCESS_KEY={{ op://Homelab/backblaze-b2/secret-access-key }}
 DISCORD_WEBHOOK_URL={{ op://Homelab/grafana/discord-webhook-url }}
 GRAFANA_ROOT_URL=https://grafana-oci.lapis-dev.work
-CF_TUNNEL_TOKEN={{ op://Homelab/cloudflare/tunnel-token }}
-INGEST_PASSWORD_HASH={{ op://Homelab/caddy/ingest-password-hash }}
 ```
 
 起動時に実際の `.env` を生成します。
@@ -944,6 +964,15 @@ chmod 600 /opt/monitoring/.env
 ```
 
 `.env` はコミットしません。`.gitignore` に `.env`、`.env.*`（`.env.example` と `.env.tpl` を除く）、`secrets/` を追加します。
+
+nginx の Basic Auth パスワードは `.env` には入れません。デプロイ時に 1Password から `/etc/nginx/.htpasswd` を生成します。
+
+```bash
+op read 'op://Homelab/nginx/vmagent-password' \
+  | sudo htpasswd -i /etc/nginx/.htpasswd vmagent
+op read 'op://Homelab/nginx/fluent-bit-password' \
+  | sudo htpasswd -i /etc/nginx/.htpasswd fluent-bit
+```
 
 ### Grafana 管理者シークレット
 
@@ -992,8 +1021,6 @@ WantedBy=multi-user.target
   env:
     OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
     SSH_KEY: op://Homelab/oci/deploy-ssh-key?ssh-format=openssh
-    CF_ACCESS_CLIENT_ID: op://Homelab/cloudflare/access-client-id
-    CF_ACCESS_CLIENT_SECRET: op://Homelab/cloudflare/access-client-secret
 ```
 
 Workload Identity を使うと、長期 Service Account トークンを置かずに済みます。
@@ -1026,11 +1053,11 @@ Workload Identity は public preview です。利用前に利用可否を確認�
 
 ### Phase 0: 事前確認
 
-- VictoriaMetrics、Loki、Grafana、Caddy、`cloudflared` の現在のイメージタグを記録します。
+- VictoriaMetrics、Loki、Grafana の現在のイメージタグと、ホスト nginx / certbot のバージョンを記録します。
 - メトリクス系列数、Loki の1日あたり受信バイト数、PVC 使用量を計測します。
 - OCI A1 のキャパシティ、パブリック IP、ブロックボリューム、NSG を確認します。
 - B2 バケット、アプリケーションキー、Lifecycle ルールを作成します。
-- Grafana ホスト名の Cloudflare DNS TTL を 60秒に下げます。
+- Grafana と取り込みホスト名の DNS A/AAAA レコードが OCI のパブリック IP を指しているか確認します。
 - OCI ブロックボリュームの新規バックアップとオンプレミスのバックアップを取得します。
 - Grafana DNS 切り替えのメンテナンスウィンドウを確保します。
 
@@ -1040,7 +1067,7 @@ Workload Identity は public preview です。利用前に利用可否を確認�
 2. ブロックボリュームを `/srv/monitoring` にアタッチし、`nofail` でマウントします。
 3. Docker Engine と Compose プラグインをインストールします。
 4. `/opt/monitoring` とディレクトリ構成を作成します。
-5. Cloudflare Tunnel と検証用ホスト名を作成します。
+5. nginx の server block を作成し、certbot で証明書を取得します。
 6. systemd ユニットを設定します。
 
 検証:
@@ -1069,7 +1096,7 @@ systemctl status monitoring
    curl -fsS http://127.0.0.1:3000/api/health
    ```
 
-5. Cloudflare Access 経由で `https://grafana-oci.<domain>` を開きます。
+5. `https://grafana.<domain>` を nginx 経由（Basic Auth + Grafana ログイン）で開きます。
 6. データソース、ダッシュボード、アラートルールが読み込まれたか確認します。
 
 ### Phase 3: メトリクス経路
@@ -1108,8 +1135,8 @@ systemctl status monitoring
 
 1. OCI 側でダッシュボードとアラートルールが正しいか確認します。
 2. 二重書き込み中は OCI ルールを `isPaused: true` のままにし、オンプレミスのアラートを有効にします。カットオーバー時に OCI ルールを `isPaused: false` にし、オンプレミスの Discord コンタクトポイントを無効化します。両方の通知経路を同時に動かさないでください。
-3. オンプレミス Grafana Ingress を無効化し、Cloudflare コントローラが DNS レコードを管理しなくなるようにします。
-4. `grafana-k8s.<domain>` を OCI トンネルへ変更します。
+3. DNS は既に割り当て済みです。本番 Grafana ホスト名がまだオンプレミスを指している場合は、A/AAAA レコードを OCI のパブリック IP へ変更します。そうでなければ DNS 変更は不要です。
+4. 本番用の nginx server block と証明書を有効化し、nginx を reload します。
 5. ロールバック用にオンプレミス Grafana を読み取り専用で残します。
 6. テストアラートを送信し、Discord へ届くか確認します。
 
@@ -1129,7 +1156,7 @@ systemctl status monitoring
 
 ロールバック手順:
 
-1. DNS レコードをオンプレミスのトンネルまたは Ingress へ戻します。
+1. DNS レコードを変更していた場合はオンプレミスへ戻します。
 2. OCI の `remoteWrite` と Loki 出力を削除します。
 3. オンプレミスの Discord コンタクトポイントを再有効化します。
 4. 調査のため OCI VM を残します。ロールバック期間中は削除しないでください。
@@ -1154,7 +1181,7 @@ systemctl status monitoring
 | リスク | 影響 | 対策 |
 | --- | --- | --- |
 | B2 lifecycle が無効 | ストレージが際限なく増え、B2 性能が劣化 | 最小 Lifecycle ルールを有効化するか外部クリーンアップジョブを回す |
-| パブリック IP 露出 | SSH やサービスへの侵害 | NSG 許可リスト、鍵のみ SSH、サービスポートを公開しない、Cloudflare Tunnel |
+| パブリック IP 露出 | SSH やサービスへの侵害 | NSG 許可リスト、鍵のみ SSH、nginx のみ 80/443 を公開 |
 | 単一 OCI VM の障害 | リストアまで監視が停止 | 日次バックアップ、リストア訓練、外部 uptime check、SPOF は受け入れ |
 | Loki/B2 クエリ遅延 | ダッシュボードと調査が遅い | 切り替え前にテスト、保持短縮、チャンク拡大、クエリ制限 |
 | Loki バージョン不整合 | 起動失敗やデータ読めない | イメージ固定、`-verify-config`、S3 書き込みテスト |
@@ -1178,7 +1205,7 @@ systemctl status monitoring
 ハイブリッド計画が追加する運用複雑さ:
 
 - 検証期間中は2つの監視スタックが並走します。
-- パブリック IP と2つ目の Cloudflare Tunnel が増えます。
+- パブリックな nginx が 80/443 で増えます。
 - Docker Compose のデプロイと CI/CD パイプラインが別に必要です。
 - B2 の Lifecycle とクエリ遅延の調整が必要です。
 
@@ -1196,12 +1223,12 @@ systemctl status monitoring
 ### 実装前に変えるべき点
 
 1. **B2 Lifecycle。** 無効のままだと計画に上限がありません。非表示バージョンだけを削除する最小ルールを有効化するか、外部クリーンアップジョブを追加してください。これが最重要の修正です。
-2. **パブリック IP のロックダウン。** パブリック IP が許容されるのは、NSG が厳しく、SSH が鍵のみで、サービスポートを公開していない場合に限ります。Caddy、Grafana、VictoriaMetrics、Loki を直接公開しないでください。
+2. **パブリック IP のロックダウン。** NSG が厳しく、SSH が鍵のみで、公開するのは nginx の 80/443 だけです。Grafana、VictoriaMetrics、Loki を直接公開しないでください。
 3. **バックアップとリストア。** 単一 VM 運用は受け入れますが、RTO は明示してテストする必要があります。最低限、ブロックボリュームの日次バックアップと四半期リストア訓練を行ってください。
-4. **安全な CI/CD 経路。** GitHub ホスト型ランナーの IP は固定ではありません。Cloudflare Tunnel SSH、Tailscale、self-hosted ランナーのいずれかを使い、SSH を世界に開けないでください。
+4. **安全な CI/CD 経路。** GitHub ホスト型ランナーの IP は固定ではありません。パブリック IP 経由 SSH は安定した管理者 CIDR に制限するか、Tailscale / self-hosted ランナーを使い、SSH を世界に開けないでください。
 5. **Loki/B2 検証。** 切り替え前に、固定イメージでクエリ遅延、`zstd` の CPU コスト、S3 書き込みをテストしてください。CPU が問題なら `gzip` に戻します。
 6. **アラート二重化。** 二重書き込み中は片方の Grafana のアラートを pause します。合成アラートで end-to-end にテストしてください。
-7. **DNS 手順。** 現在の Grafana レコードはオンプレミスの Cloudflare コントローラが所有しています。DNS を変える前にその Ingress を無効化し、旧レコードをロールバック用に保持してください。
+7. **DNS 手順。** DNS レコードは既に割り当て済みです。カットオーバー前に Grafana と取り込みホスト名が OCI のパブリック IP を指しているか確認し、旧値をロールバック用に保持してください。
 8. **欠損データとハートビートのアラート。** オンプレミス収集が死んだとき、閾値ルールだけでは発火しません。[ホームラボ障害時のアラート](#ホームラボ障害時のアラート)にあるルールとハートビートを追加してください。
 
 ### 残存リスク
@@ -1210,17 +1237,40 @@ systemctl status monitoring
 - B2 には APAC リージョンがありません。OCI VM が東京なら、ローカルディスクよりクエリ遅延が大きくなります。6ヶ月ログ保持にコミットする前にテストしてください。
 - B2 はコスト最適化であり、性能層ではありません。6ヶ月ログを頻繁にクエリするなら、同一リージョンの OCI Object Storage や大きなローカルブロックボリュームの方が、高価でも良いトレードオフになり得ます。
 - Docker Compose は GitOps ではありません。VM 上でファイルを直接編集すると逸脱が起き得ます。デプロイスクリプトは `origin/main` へリセットする運用にし、手動編集は禁止します。
-- Always Free の 200 GiB ブロック枠をちょうど消費しています。増やすには有償ボリュームか保持短縮が必要です。
+- 50 GiB のメトリクスボリュームは余裕が少ないです。増やすには有償ボリュームか保持短縮が必要です。
 
 ### 結論
 
 この計画は**条件付きで妥当**です。B2 Lifecycle に上限を付け、パブリック IP をロックダウンし、バックアップとリストアをテストし、CI/CD 経路を安全にし、**ホームラボ障害を検知するための欠損データ/ハートビートアラートを入れれば**受け入れられます。それらがないと、ストレージコストが無制限に増え、不要なインターネット露出があり、肝心の障害時に通知できない計画になります。
 
+## 今後の展望
+
+### push 型の node-exporter メトリクス収集
+
+現在は pull 型です。`vmagent` が Technitium HTTP SD で VM の node exporter を検出し、ポート 9100 をスクレイプしています。将来的には、各 VM 上のエージェントが VictoriaMetrics の remote_write へ push する方式に移行できます。
+
+利点:
+
+- クラスタから VM ネットワークへのインバウンドスクレイプ経路が不要になります。
+- ファイアウォールが単純になり、NAT やローミング VM にも対応しやすくなります。
+- 収集経路が OCI 移行と同じくアウトバウンドのみになります。
+
+必要な作業:
+
+- push エージェント（vmagent の push モード、Telegraf 等）の選定とデプロイ
+- 障害時のローカルバッファとリトライ
+- nginx Basic Auth と同じ方式で push エンドポイントを保護
+- ラベルと系列数の暴走を抑える制御
+- pull と push の二重収集で系列数とサンプルレートを比較してから pull を廃止
+
+この変更は**今回の移行では実装しません**。検証とロールバック計画を別途用意してから行います。
+
 ## 未決定事項
 
 - B2 のリージョンとエンドポイント。OCI VM に最も近いリージョンを選びます。
 - OCI リージョンと予約済みパブリック IP が利用可能か。
-- 本番 Grafana ホスト名と Cloudflare Access の IdP。
+- 本番 Grafana ホスト名と nginx 認証戦略。
+- certbot 更新の監視と担当者。
 - カットオーバー後に 14〜30日のローカル `vmsingle` バッファを残すか。
 - 6ヶ月ログ保持が B2 のクエリ遅延に見合うか、90日で十分か。
 - バックアップ保持と正確な RTO 目標。
@@ -1233,14 +1283,14 @@ systemctl status monitoring
 - [ ] メトリクス系列数と Loki バイト/日を計測した
 - [ ] B2 バケット、スコープ付きアプリケーションキー、Lifecycle ルールを確認した
 - [ ] OCI VM、パブリック IP、NSG、ブートボリューム、ブロックボリュームを確認した
-- [ ] Cloudflare Tunnel と検証用ホスト名を作成した
+- [ ] nginx server block と certbot 証明書を作成した
 - [ ] DNS TTL を 60秒に下げた
 - [ ] バックアップを取得し、リストア手順を文書化した
 
 ### デプロイ
 
 - [ ] `docker compose config -q` が通る
-- [ ] Caddy validate が通る
+- [ ] `nginx -t` が通り、nginx を reload した
 - [ ] Loki `-verify-config` が通る
 - [ ] Grafana provisioning スモークテストが通る
 - [ ] `docker compose up -d --wait` が健全
