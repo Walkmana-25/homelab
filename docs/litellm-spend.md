@@ -9,6 +9,10 @@
 spend ログは `litellm-postgres` の PostgreSQL (`database: litellm`) に保存される
 (`general_settings.store_model_in_db: true`, `store_prompts_in_spend_logs: true`)。
 保持期間は `maximum_spend_logs_retention_period: "90d"`、毎日 03:00 に削除ジョブが走る。
+`store_prompts_in_spend_logs: true` がリクエスト/レスポンスの全ペイロードを TOAST に
+保存するため、`LiteLLM_SpendLogs` の大半 (~85MB/日 程度) は TOAST が占める。90日保持の
+定常状態では ~8GB に達する見込みで、`litellm-postgres` の data volume は 10Gi に設定して
+ある（`cluster/cluster.yaml` の `spec.storage.size`、LINSTOR `ssd`、オンライン拡張可）。
 
 | テーブル | 粒度 |
 | --- | --- |

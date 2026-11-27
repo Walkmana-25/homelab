@@ -224,7 +224,7 @@ spec:
             # ―― Spend-log retention ――
             # LiteLLM only registers the cleanup job when one of the
             # maximum_*_retention_period settings is set; otherwise logs are
-            # kept forever (bounded only by the 5Gi postgres volume). Prompts
+            # kept forever (bounded only by the postgres volume). Prompts
             # roughly quadruple the per-row size, so cap it at 90 days and run
             # the prune daily at 03:00.
             maximum_spend_logs_retention_period: "90d"
